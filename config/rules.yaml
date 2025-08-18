@@ -1,0 +1,170 @@
+# 基于LLM和向量数据库的自动文档分类系统配置文件
+
+# LLM配置
+llm:
+  provider: "openai"  # openai, claude, ollama
+  model: "gpt-4"
+  api_key: null  # 请设置您的API密钥
+  base_url: null
+  temperature: 0.1
+  max_tokens: 1000
+
+# 嵌入模型配置
+embedding:
+  type: "local"  # local, api
+  model_name: "BAAI/bge-m3"  # bge-m3, e5-large, openai-ada
+  device: "auto"  # auto, cpu, cuda
+  max_length: 8192
+  dimension: 1024
+  batch_size: 32
+  max_workers: 4
+  chunk_strategy: "smart"  # smart, fixed, none
+  fallback_strategy: "retry"  # retry, skip, alternative
+  
+  # 本地模型配置
+  local:
+    model_path: null  # 自定义模型路径，null表示使用预训练模型
+    cache_dir: ".ods/models"
+    
+  # API模型配置
+  api:
+    provider: "openai"  # openai, anthropic
+    api_key: null  # 请设置您的API密钥
+    api_base: null  # 自定义API端点
+    timeout: 30
+    retry_attempts: 3
+
+# 数据库配置
+database:
+  type: "sqlite"
+  path: ".ods/db.sqlite"
+  vector_db_path: ".ods/vector_db"
+  sqlite_path: "data/audit.db"
+  audit_table: "file_operations"
+  status_table: "file_status"
+
+# 向量存储配置
+vector_store:
+  chroma_path: "data/chroma_db"
+  collection_name: "documents"
+  similarity_threshold: 0.8
+  max_results: 10
+
+# LlamaIndex配置
+llama_index:
+  enable: true
+  index_path: "data/llama_index"
+  chunk_size: 1000
+  chunk_overlap: 200
+  similarity_top_k: 5
+
+# 分类配置
+classification:
+  categories:
+    - "工作"
+    - "个人" 
+    - "财务"
+    - "其他"
+  confidence_threshold: 0.8
+  review_threshold: 0.6
+  max_tags: 3
+
+# 文件处理配置
+file:
+  source_directory: ""  # 请设置您的源目录
+  target_directory: "分类"
+  supported_extensions:
+    - ".pdf"
+    - ".docx"
+    - ".doc"
+    - ".pptx"
+    - ".ppt"
+    - ".txt"
+    - ".md"
+    - ".jpg"
+    - ".jpeg"
+    - ".png"
+  max_file_size: 104857600  # 100MB
+
+# 文本处理配置
+text_processing:
+  max_chunk_size: 1000
+  overlap_size: 100
+  min_chunk_size: 100
+  clean_text: true
+  remove_stopwords: false
+  lemmatize: false
+  generate_summary: true
+  extract_keywords: true
+  max_summary_length: 200
+  max_keywords: 10
+
+# 解析器配置
+parser:
+  priority:
+    - "pdf"
+    - "office"
+    - "text"
+    - "ocr"
+  ocr_fallback: true
+
+# PDF解析配置
+pdf:
+  max_pages: 100
+  extract_metadata: true
+
+# Office文档解析配置
+office:
+  extract_metadata: true
+  max_slides: 50  # PowerPoint最大幻灯片数
+  max_sheets: 10  # Excel最大工作表数
+
+# 文本文件解析配置
+text:
+  max_length: 1000000  # 1MB
+  encoding_detection: true
+  default_encoding: "utf-8"
+
+# OCR配置
+ocr:
+  language: "chi_sim+eng"  # 中文简体+英文
+  psm: 3  # Page Segmentation Mode
+  oem: 3  # OCR Engine Mode
+  dpi: 300
+  min_confidence: 60
+  preprocess: true
+  resize_factor: 2.0
+
+# 路径规划配置
+path_planning:
+  base_path: "OneDrive/分类"
+  default_categories: ["工作", "个人", "财务", "其他"]
+  multi_label_strategy: "primary_with_links"
+  path_template: "{category}/{year}/{month}"
+  conflict_resolution: "suffix"
+  max_path_length: 260
+  category_mapping_file: "config/category_mapping.yaml"
+  special_paths:
+    uncategorized: "待整理"
+    needs_review: "待审核"
+    important: "重要文件"
+    archive: "归档"
+
+# 命名生成配置
+naming:
+  default_template: "{{category}}-{{title}}-{{date}}.{{ext}}"
+  max_filename_length: 200
+  enable_llm_title: true
+  title_max_length: 50
+  conflict_resolution: "suffix"
+  invalid_chars: "[<>:\"/\\\\|?*]"
+  replacement_char: "_"
+  templates_file: "config/naming_templates.yaml"
+
+# 系统配置
+system:
+  log_level: "INFO"
+  log_file: ".ods/ods.log"
+  temp_directory: ".ods/temp"
+  backup_enabled: true
+  dry_run: false

@@ -1,0 +1,43 @@
+# 命名模板配置
+# 定义不同类别和文件类型的命名模板
+
+# 默认模板
+default: "{{category}}-{{title}}-{{date}}.{{ext}}"
+
+# 工作相关模板
+工作: "工作-{{title}}-{{date}}.{{ext}}"
+个人: "个人-{{title}}-{{date}}.{{ext}}"
+财务: "财务-{{title}}-{{date}}.{{ext}}"
+
+# 项目相关模板
+项目A: "项目A-{{title}}-{{date}}.{{ext}}"
+项目B: "项目B-{{title}}-{{date}}.{{ext}}"
+项目C: "项目C-{{title}}-{{date}}.{{ext}}"
+
+# 客户相关模板
+客户A: "客户A-{{title}}-{{date}}.{{ext}}"
+客户B: "客户B-{{title}}-{{date}}.{{ext}}"
+
+# 文档类型模板
+合同: "合同-{{title}}-{{date}}.{{ext}}"
+发票: "发票-{{title}}-{{date}}.{{ext}}"
+报告: "报告-{{title}}-{{date}}.{{ext}}"
+会议记录: "会议记录-{{title}}-{{date}}.{{ext}}"
+培训材料: "培训材料-{{title}}-{{date}}.{{ext}}"
+
+# 文件类型模板
+pdf: "{{category}}-{{title}}-{{date}}.pdf"
+doc: "{{category}}-{{title}}-{{date}}.doc"
+docx: "{{category}}-{{title}}-{{date}}.docx"
+xls: "{{category}}-{{title}}-{{date}}.xls"
+xlsx: "{{category}}-{{title}}-{{date}}.xlsx"
+ppt: "{{category}}-{{title}}-{{date}}.ppt"
+pptx: "{{category}}-{{title}}-{{date}}.pptx"
+txt: "{{category}}-{{title}}-{{date}}.txt"
+md: "{{category}}-{{title}}-{{date}}.md"
+
+# 特殊模板
+重要: "重要-{{title}}-{{date}}.{{ext}}"
+归档: "归档-{{title}}-{{date}}.{{ext}}"
+待审核: "待审核-{{title}}-{{date}}.{{ext}}"
+待整理: "待整理-{{title}}-{{date}}.{{ext}}"

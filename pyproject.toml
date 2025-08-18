@@ -1,0 +1,84 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "auto-file-classification"
+version = "0.1.0"
+description = "基于LLM和向量数据库的自动文档分类系统"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Auto File Classification Team"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "langchain>=0.1.0",
+    "langgraph>=0.0.20",
+    "llama-index>=0.9.0",
+    "chromadb>=0.4.0",
+    "pdfminer.six>=20221105",
+    "python-docx>=0.8.11",
+    "python-pptx>=0.6.21",
+    "textract>=1.6.5",
+    "pytesseract>=0.3.10",
+    "Pillow>=10.0.0",
+    "sentence-transformers>=2.2.0",
+    "transformers>=4.35.0",
+    "torch>=2.0.0",
+    "openai>=1.0.0",
+    "anthropic>=0.7.0",
+    "pyyaml>=6.0",
+    "jinja2>=3.1.0",
+    "watchdog>=3.0.0",
+    "click>=8.1.0",
+    "rich>=13.0.0",
+    "tqdm>=4.65.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.5.0",
+]
+
+[project.scripts]
+ods = "ods.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/your-username/auto-file-classification"
+Repository = "https://github.com/your-username/auto-file-classification"
+Issues = "https://github.com/your-username/auto-file-classification/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ods*"]
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
