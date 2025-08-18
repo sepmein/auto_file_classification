@@ -168,3 +168,9 @@ embeddings/
 logs/
 temp/
 cache/
+real_test_documents/个人旅行日记.txt
+real_test_documents/发票_2023年10月.pdf
+real_test_documents/工作合同.docx
+test_documents/个人日记.txt
+test_documents/发票明细.txt
+test_documents/工作报告.txt

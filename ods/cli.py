@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from .core.config import Config
+from .core.workflow import DocumentClassificationWorkflow
 from .parsers.document_parser import DocumentParser
 
 
@@ -66,15 +67,15 @@ def init(ctx):
 def parse(ctx, file_path: str):
     """解析单个文件（测试功能）"""
     config = ctx.obj['config']
-    
+
     click.echo(f"正在解析文件: {file_path}")
-    
+
     # 创建解析器
     parser = DocumentParser(config.get_config_dict())
-    
+
     # 解析文件
     result = parser.parse(file_path)
-    
+
     if result.success:
         click.echo(f"解析成功！")
         click.echo(f"解析器类型: {result.parser_type}")
@@ -83,6 +84,151 @@ def parse(ctx, file_path: str):
         click.echo(f"文档摘要: {result.summary}")
     else:
         click.echo(f"解析失败: {result.error}", err=True)
+
+
+@main.command()
+@click.argument("source_directory", type=click.Path(exists=True), required=False)
+@click.option("--dry-run", is_flag=True, help="仅模拟运行，不实际移动文件")
+@click.option("--recursive", "-r", is_flag=True, help="递归处理子目录")
+@click.option("--filter-ext", multiple=True, help="只处理指定扩展名的文件")
+@click.pass_context
+def apply(
+    ctx,
+    source_directory: Optional[str],
+    dry_run: bool,
+    recursive: bool,
+    filter_ext: tuple,
+):
+    """执行文档分类整理 (Stage 1 MVP)"""
+    config = ctx.obj["config"]
+
+    # 更新配置
+    if dry_run:
+        config.system.dry_run = True
+        click.echo("🔍 模拟运行模式 - 不会实际移动文件")
+
+    # 确定源目录
+    if not source_directory:
+        source_directory = config.file.source_directory
+        if not source_directory:
+            click.echo("❌ 未指定源目录，请提供目录路径或在配置中设置", err=True)
+            return
+
+    source_path = Path(source_directory)
+    if not source_path.exists():
+        click.echo(f"❌ 源目录不存在: {source_path}", err=True)
+        return
+
+    click.echo(f"📁 处理目录: {source_path}")
+    click.echo(f"🎯 目标目录: {config.file.target_directory}")
+
+    try:
+        # 创建工作流
+        workflow = DocumentClassificationWorkflow(config.get_config_dict())
+
+        # 收集文件
+        files_to_process = []
+
+        if recursive:
+            pattern = "**/*"
+        else:
+            pattern = "*"
+
+        for file_path in source_path.glob(pattern):
+            if file_path.is_file():
+                # 检查扩展名过滤
+                if filter_ext:
+                    if file_path.suffix.lower() not in filter_ext:
+                        continue
+                else:
+                    # 检查是否在支持的扩展名中
+                    if file_path.suffix.lower() not in config.file.supported_extensions:
+                        continue
+
+                files_to_process.append(file_path)
+
+        if not files_to_process:
+            click.echo("ℹ️  没有找到需要处理的文件")
+            return
+
+        click.echo(f"📋 找到 {len(files_to_process)} 个文件待处理")
+
+        # 处理文件
+        results = {
+            "total": len(files_to_process),
+            "success": 0,
+            "failed": 0,
+            "needs_review": 0,
+            "details": [],
+        }
+
+        with click.progressbar(files_to_process, label="处理文件") as files:
+            for file_path in files:
+                try:
+                    result = workflow.process_file(file_path)
+
+                    # 分析结果
+                    if result.get("move_success", False):
+                        results["success"] += 1
+                        status = "✅ 成功"
+                    elif result.get("classification", {}).get("needs_review", False):
+                        results["needs_review"] += 1
+                        status = "⚠️  需要审核"
+                    else:
+                        results["failed"] += 1
+                        status = "❌ 失败"
+
+                    # 记录详细信息
+                    details = {
+                        "file": str(file_path),
+                        "status": status,
+                        "category": result.get("classification", {}).get(
+                            "primary_category", "未知"
+                        ),
+                        "confidence": result.get("classification", {}).get(
+                            "confidence_score", 0.0
+                        ),
+                        "new_path": result.get("move_result", {}).get(
+                            "primary_target_path", ""
+                        ),
+                        "error": result.get("error", ""),
+                    }
+                    results["details"].append(details)
+
+                except Exception as e:
+                    results["failed"] += 1
+                    click.echo(f"\n❌ 处理失败: {file_path} - {e}")
+
+        # 显示结果汇总
+        click.echo("\n" + "=" * 50)
+        click.echo("📊 处理结果汇总")
+        click.echo("=" * 50)
+        click.echo(f"总文件数: {results['total']}")
+        click.echo(f"成功处理: {results['success']}")
+        click.echo(f"需要审核: {results['needs_review']}")
+        click.echo(f"处理失败: {results['failed']}")
+
+        # 显示详细结果
+        if ctx.obj.get("verbose", False):
+            click.echo("\n📋 详细结果:")
+            for detail in results["details"]:
+                click.echo(f"{detail['status']} {detail['file']}")
+                if detail["category"] != "未知":
+                    click.echo(
+                        f"    分类: {detail['category']} (置信度: {detail['confidence']:.2f})"
+                    )
+                if detail["new_path"]:
+                    click.echo(f"    新路径: {detail['new_path']}")
+                if detail["error"]:
+                    click.echo(f"    错误: {detail['error']}")
+
+        # 需要审核的文件
+        if results["needs_review"] > 0:
+            click.echo(f"\n⚠️  有 {results['needs_review']} 个文件需要人工审核")
+            click.echo("💡 使用 'ods review' 命令处理这些文件")
+
+    except Exception as e:
+        click.echo(f"❌ 工作流执行失败: {e}", err=True)
 
 
 @main.command()

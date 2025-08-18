@@ -10,7 +10,6 @@ import logging
 from datetime import datetime
 
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
 
 from ..parsers.document_parser import DocumentParser
 from ..embeddings.embedder import Embedder
@@ -24,11 +23,11 @@ from ..storage.index_updater import IndexUpdater
 
 class DocumentClassificationWorkflow:
     """文档分类工作流引擎"""
-    
+
     def __init__(self, config: Dict[str, Any]):
         self.config = config
         self.logger = logging.getLogger(__name__)
-        
+
         # 初始化各个模块
         self.document_parser = DocumentParser(config)
         self.embedder = Embedder(config)
@@ -38,14 +37,14 @@ class DocumentClassificationWorkflow:
         self.rule_engine = RuleEngine(config)
         self.file_mover = FileMover(config)
         self.index_updater = IndexUpdater(config)
-        
+
         # 构建工作流图
         self.workflow = self._build_workflow()
-    
+
     def _build_workflow(self) -> StateGraph:
         """构建工作流图"""
-        workflow = StateGraph(StateType=Dict[str, Any])
-        
+        workflow = StateGraph(Dict[str, Any])
+
         # 添加节点
         workflow.add_node("parse_document", self._parse_document)
         workflow.add_node("generate_embedding", self._generate_embedding)
@@ -55,7 +54,7 @@ class DocumentClassificationWorkflow:
         workflow.add_node("apply_rules", self._apply_rules)
         workflow.add_node("move_file", self._move_file)
         workflow.add_node("update_index", self._update_index)
-        
+
         # 设置边和条件
         workflow.set_entry_point("parse_document")
         workflow.add_edge("parse_document", "generate_embedding")
@@ -66,9 +65,9 @@ class DocumentClassificationWorkflow:
         workflow.add_edge("apply_rules", "move_file")
         workflow.add_edge("move_file", "update_index")
         workflow.add_edge("update_index", END)
-        
-        return workflow.compile(checkpointer=MemorySaver())
-    
+
+        return workflow.compile()
+
     def _parse_document(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """解析文档节点"""
         try:
@@ -81,26 +80,26 @@ class DocumentClassificationWorkflow:
             state["parse_success"] = False
             state["error"] = str(e)
         return state
-    
+
     def _generate_embedding(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """生成嵌入向量节点"""
         if not state.get("parse_success", False):
             return state
-            
+
         try:
             parsed_content = state["parsed_content"]
             file_path = state["file_path"]
-            
+
             # 准备文档数据
             document_data = {
-                'file_path': file_path,
-                'text_content': parsed_content.get('text', ''),
-                'metadata': parsed_content.get('metadata', {})
+                "file_path": file_path,
+                "text_content": parsed_content.content.text,
+                "metadata": parsed_content.content.metadata,
             }
-            
+
             # 生成嵌入向量
             embedding_result = self.embedder.process_document(document_data)
-            
+
             if embedding_result['status'] == 'success':
                 state["embedding"] = embedding_result['embedding']
                 state["embedding_summary"] = embedding_result['summary']
@@ -112,37 +111,37 @@ class DocumentClassificationWorkflow:
                 state["embedding_success"] = False
                 state["embedding_error"] = embedding_result.get('error_message', '未知错误')
                 self.logger.error(f"嵌入生成失败: {file_path}")
-                
+
         except Exception as e:
             self.logger.error(f"嵌入生成失败: {e}")
             state["embedding_success"] = False
             state["error"] = str(e)
-            
+
         return state
-    
+
     def _classify_document(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """分类文档节点"""
         if not state.get("parse_success", False) or not state.get("embedding_success", False):
             return state
-            
+
         try:
             file_path = state["file_path"]
             parsed_content = state["parsed_content"]
             embedding = state.get("embedding")
             embedding_summary = state.get("embedding_summary", "")
-            
+
             # 准备文档数据
             document_data = {
-                'file_path': file_path,
-                'text_content': parsed_content.get('text', ''),
-                'summary': embedding_summary,
-                'embedding': embedding,
-                'metadata': parsed_content.get('metadata', {})
+                "file_path": file_path,
+                "text_content": parsed_content.content.text,
+                "summary": embedding_summary,
+                "embedding": embedding,
+                "metadata": parsed_content.content.metadata,
             }
-            
+
             # 执行分类
             classification_result = self.classifier.classify_document(document_data)
-            
+
             if classification_result.get('primary_category'):
                 state["classification"] = classification_result
                 state["classify_success"] = True
@@ -151,7 +150,7 @@ class DocumentClassificationWorkflow:
                 state["classify_success"] = False
                 state["classification_error"] = "分类结果为空"
                 self.logger.warning(f"文档分类结果为空: {file_path}")
-                
+
         except Exception as e:
             self.logger.error(f"文档分类失败: {e}")
             state["classify_success"] = False
@@ -170,23 +169,47 @@ class DocumentClassificationWorkflow:
             parsed_content = state["parsed_content"]
 
             # 准备文件元数据
-            file_metadata = parsed_content.get('metadata', {})
-            file_metadata.update({
-                'file_size': parsed_content.get('file_size', 0),
-                'file_type': parsed_content.get('file_type', ''),
-                'creation_time': parsed_content.get('creation_time', ''),
-                'modification_time': parsed_content.get('modification_time', '')
-            })
+            file_metadata = parsed_content.content.metadata.copy()
+            file_path_obj = Path(file_path)
+
+            # 添加文件系统信息
+            try:
+                stat_info = file_path_obj.stat()
+                file_metadata.update(
+                    {
+                        "file_size": stat_info.st_size,
+                        "file_type": file_path_obj.suffix.lower(),
+                        "creation_time": parsed_content.content.creation_date,
+                        "modification_time": parsed_content.content.modification_date,
+                    }
+                )
+            except Exception as e:
+                self.logger.warning(f"无法获取文件统计信息: {e}")
+                file_metadata.update(
+                    {
+                        "file_size": 0,
+                        "file_type": file_path_obj.suffix.lower(),
+                        "creation_time": parsed_content.content.creation_date,
+                        "modification_time": parsed_content.content.modification_date,
+                    }
+                )
 
             # 执行路径规划
             path_plan = self.path_planner.plan_file_path(
                 classification_result, file_path, file_metadata
             )
 
-            if path_plan.get('status') == 'planned':
+            if path_plan.get("status") in ["planned", "needs_review"]:
                 state["path_plan"] = path_plan
                 state["plan_success"] = True
-                self.logger.info(f"路径规划成功: {file_path} -> {path_plan['primary_path']}")
+                if path_plan.get("status") == "needs_review":
+                    self.logger.info(
+                        f"路径规划完成(需要审核): {file_path} -> {path_plan['primary_path']}"
+                    )
+                else:
+                    self.logger.info(
+                        f"路径规划成功: {file_path} -> {path_plan['primary_path']}"
+                    )
             else:
                 state["plan_success"] = False
                 state["plan_error"] = path_plan.get('error_message', '路径规划失败')
@@ -212,10 +235,10 @@ class DocumentClassificationWorkflow:
 
             # 准备文档数据
             document_data = {
-                'file_path': file_path,
-                'text_content': parsed_content.get('text', ''),
-                'summary': state.get('embedding_summary', ''),
-                'metadata': parsed_content.get('metadata', {})
+                "file_path": file_path,
+                "text_content": parsed_content.content.text,
+                "summary": state.get("embedding_summary", ""),
+                "metadata": parsed_content.content.metadata,
             }
 
             # 执行命名生成
@@ -243,23 +266,43 @@ class DocumentClassificationWorkflow:
         """应用规则节点"""
         if not state.get("classify_success", False):
             return state
-            
+
         try:
-            classification = state["classification"]
-            rules_result = self.rule_engine.apply_rules(state)
-            state["rules_result"] = rules_result
+            classification_result = state["classification"]
+            parsed_content = state["parsed_content"]
+            file_path = state["file_path"]
+
+            # 准备文档数据
+            document_data = {
+                "file_path": file_path,
+                "text_content": parsed_content.content.text,
+                "summary": state.get("embedding_summary", ""),
+                "metadata": parsed_content.content.metadata,
+            }
+
+            # 应用规则
+            updated_classification = self.rule_engine.apply_rules(
+                classification_result, document_data
+            )
+
+            # 更新分类结果
+            state["classification"] = updated_classification
+            state["rules_result"] = updated_classification
             state["rules_success"] = True
+
+            self.logger.info(f"规则应用成功: {file_path}")
+
         except Exception as e:
             self.logger.error(f"规则应用失败: {e}")
             state["rules_success"] = False
             state["error"] = str(e)
         return state
-    
+
     def _move_file(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """移动文件节点"""
         if not state.get("rules_success", False) or not state.get("naming_success", False) or not state.get("plan_success", False):
             return state
-            
+
         try:
             path_plan = state["path_plan"]
             naming_result = state["naming_result"]
@@ -271,40 +314,49 @@ class DocumentClassificationWorkflow:
             state["move_success"] = False
             state["error"] = str(e)
         return state
-    
+
     def _update_index(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """更新索引节点"""
         if not state.get("move_success", False):
             return state
-            
+
         try:
             move_result = state["move_result"]
-            document_data = state["parsed_content"]
+            parsed_content = state["parsed_content"]
             classification_result = state["classification"]
-            
+
+            # 准备文档数据
+            document_data = {
+                "text": parsed_content.content.text,
+                "title": parsed_content.content.title,
+                "metadata": parsed_content.content.metadata,
+                "word_count": parsed_content.content.word_count,
+                "page_count": parsed_content.content.page_count,
+            }
+
             # 计算处理时间
             start_time = state.get("start_time", datetime.now())
             processing_time = (datetime.now() - start_time).total_seconds()
-            
+
             # 更新索引
             update_result = self.index_updater.update_indexes(
                 move_result, document_data, classification_result, processing_time
             )
-            
+
             state["index_update_result"] = update_result
             state["index_updated"] = update_result.get("success", False)
-            
+
             if update_result.get("success", False):
                 self.logger.info(f"索引更新成功: {move_result.get('original_path', '')}")
             else:
                 self.logger.warning(f"索引更新失败: {update_result.get('error', '')}")
-                
+
         except Exception as e:
             self.logger.error(f"索引更新失败: {e}")
             state["index_updated"] = False
             state["error"] = str(e)
         return state
-    
+
     def process_file(self, file_path: Path) -> Dict[str, Any]:
         """处理单个文件"""
         initial_state = {
@@ -320,21 +372,21 @@ class DocumentClassificationWorkflow:
             "move_success": False,
             "index_updated": False,
         }
-        
+
         try:
             result = self.workflow.invoke(initial_state)
             return result
         except Exception as e:
             self.logger.error(f"工作流执行失败: {e}")
             return {"error": str(e), **initial_state}
-    
+
     def process_directory(self, directory_path: Path) -> List[Dict[str, Any]]:
         """处理目录中的所有文件"""
         results = []
-        
+
         for file_path in directory_path.rglob("*"):
             if file_path.is_file():
                 result = self.process_file(file_path)
                 results.append(result)
-        
+
         return results
