@@ -10,6 +10,8 @@
 - 🔄 **规则引擎**: 可配置的分类和命名规则
 - 📊 **向量检索**: 基于语义相似度的智能匹配
 - 🛡️ **安全可靠**: 完整的审计日志和回滚机制
+- 📄 **多格式支持**: PDF、Word、PowerPoint、文本文件、图片OCR等
+- 🎯 **工作流编排**: 基于LangGraph的智能工作流管理
 
 ## 技术架构
 
@@ -19,6 +21,8 @@
 - **文档索引**: LlamaIndex
 - **LLM支持**: OpenAI, Claude, Ollama
 - **嵌入模型**: BGE-M3, E5等
+- **文档解析**: pdfminer.six, python-docx, Tesseract OCR
+- **配置管理**: YAML + Jinja2模板
 
 ## 快速开始
 
@@ -37,38 +41,203 @@ python -m ods init
 ### 运行分类整理
 
 ```bash
-python -m ods apply
+# 处理指定目录
+python -m ods apply /path/to/documents
+
+# 模拟运行（不实际移动文件）
+python -m ods apply --dry-run /path/to/documents
+
+# 递归处理子目录
+python -m ods apply -r /path/to/documents
+
+# 只处理特定文件类型
+python -m ods apply --filter-ext pdf --filter-ext docx /path/to/documents
+```
+
+### 其他命令
+
+```bash
+# 显示系统信息
+python -m ods info
+
+# 测试文件解析
+python -m ods parse /path/to/document.pdf
 ```
 
 ## 项目结构
 
 ```
-auto_file_classification_2/
+auto_file_classification/
 ├── ods/                    # 核心模块
 │   ├── __init__.py
+│   ├── cli.py             # 命令行界面
 │   ├── core/              # 核心功能
+│   │   ├── config.py      # 配置管理
+│   │   ├── database.py    # 数据库操作
+│   │   └── workflow.py    # LangGraph工作流引擎
 │   ├── parsers/           # 文档解析器
+│   │   ├── base_parser.py
+│   │   ├── document_parser.py
+│   │   ├── pdf_parser.py
+│   │   ├── office_parser.py
+│   │   ├── text_parser.py
+│   │   └── ocr_parser.py
 │   ├── classifiers/       # 分类器
+│   │   ├── classifier.py
+│   │   ├── llm_classifier.py
+│   │   ├── retrieval_agent.py
+│   │   └── rule_checker.py
 │   ├── rules/             # 规则引擎
+│   │   └── rule_engine.py
 │   ├── storage/           # 存储管理
+│   │   ├── file_mover.py
+│   │   └── index_updater.py
+│   ├── naming/            # 命名管理
+│   │   └── renamer.py
+│   ├── path_planner/      # 路径规划
+│   │   └── path_planner.py
+│   ├── embeddings/        # 嵌入模型
 │   └── utils/             # 工具函数
 ├── config/                 # 配置文件
+│   ├── category_mapping.yaml
+│   ├── naming_templates.yaml
+│   └── rules.yaml
 ├── tests/                  # 测试文件
 ├── docs/                   # 文档
-├── examples/               # 示例配置
-└── scripts/                # 脚本工具
+├── examples/               # 示例代码
+└── real_test_documents/   # 测试文档
 ```
 
-## 开发计划
+## 已实现功能
 
-- [x] 阶段1: MVP实现 - 基础分类功能
-- [ ] 阶段2: 多标签支持与改进
-- [ ] 阶段3: 规则引擎扩展与高级功能
+### ✅ 阶段1: MVP实现 - 基础分类功能
+
+- [x] 文档解析器（PDF、Word、PowerPoint、文本、OCR）
+- [x] 配置管理系统
+- [x] 数据库索引
+- [x] 基础工作流框架
+- [x] 命令行界面
+- [x] 文件移动和重命名
+- [x] 分类规则引擎
+- [x] 向量嵌入和检索
+- [x] LLM分类器
+- [x] 路径规划器
+- [x] 索引更新器
+
+### 🔄 阶段2: 多标签支持与改进
+
+- [ ] 交叉分类优化
+- [ ] 高级规则引擎
+- [ ] 用户反馈学习
+
+### 📋 阶段3: 规则引擎扩展与高级功能
+
+- [ ] 自定义分类模板
+- [ ] 批量处理优化
+- [ ] 实时监控
+
+## 使用示例
+
+### 基础使用
+
+```python
+from ods.core.workflow import DocumentClassificationWorkflow
+from ods.core.config import Config
+
+# 加载配置
+config = Config()
+workflow = DocumentClassificationWorkflow(config.get_config_dict())
+
+# 处理单个文件
+result = workflow.process_file("/path/to/document.pdf")
+print(f"分类结果: {result['classification']}")
+```
+
+### 文档解析
+
+```python
+from ods.parsers.document_parser import DocumentParser
+
+parser = DocumentParser()
+result = parser.parse("/path/to/document.pdf")
+
+if result.success:
+    print(f"标题: {result.content.title}")
+    print(f"内容: {result.content.text[:200]}...")
+    print(f"字数: {result.content.word_count}")
+```
+
+### 分类器使用
+
+```python
+from ods.classifiers.llm_classifier import LLMClassifier
+
+classifier = LLMClassifier()
+categories = classifier.classify("这是一份财务报告...")
+print(f"分类: {categories}")
+```
+
+## 配置说明
+
+系统使用YAML配置文件管理各种设置：
+
+- **category_mapping.yaml**: 分类映射规则
+- **naming_templates.yaml**: 文件命名模板
+- **rules.yaml**: 分类和移动规则
+
+配置文件支持Jinja2模板语法，可以动态生成路径和文件名。
+
+## 开发指南
+
+### 运行测试
+
+```bash
+pytest tests/
+```
+
+### 代码格式化
+
+```bash
+black ods/
+flake8 ods/
+```
+
+### 类型检查
+
+```bash
+mypy ods/
+```
 
 ## 贡献指南
 
-欢迎提交Issue和Pull Request！
+欢迎提交Issue和Pull Request！请确保：
+
+1. 代码通过所有测试
+2. 遵循项目的代码风格
+3. 添加适当的文档和注释
+4. 更新相关的测试用例
 
 ## 许可证
 
 MIT License
+
+## 更新日志
+
+### v0.1.0 (当前版本)
+
+- 完整的文档解析器实现
+- 基于LangGraph的工作流引擎
+- 向量数据库集成
+- LLM分类器支持
+- 规则引擎框架
+- 命令行界面
+- 完整的测试覆盖
+
+## 支持
+
+如果您遇到问题或有建议，请：
+
+1. 查看项目文档
+2. 搜索现有Issue
+3. 创建新的Issue描述问题
+4. 提交Pull Request贡献代码
