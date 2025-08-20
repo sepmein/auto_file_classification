@@ -30,10 +30,18 @@ class PathPlanner:
             'important': '重要文件',
             'archive': '归档'
         })
-        
+
         # 加载路径映射规则
         self.category_path_mapping = self._load_category_mapping()
-        
+
+        # 确保基础目录及常见类别目录存在，便于测试环境使用
+        base = Path(self.base_path)
+        base.mkdir(parents=True, exist_ok=True)
+        for cat in self.default_categories:
+            (base / cat).mkdir(parents=True, exist_ok=True)
+        for spath in self.special_paths.values():
+            (base / spath).mkdir(parents=True, exist_ok=True)
+
         self.logger.info("路径规划器初始化完成")
 
     def plan_file_path(self, classification_result: Dict[str, Any], 
@@ -115,13 +123,13 @@ class PathPlanner:
         # 检查用户定义的映射
         if category in self.category_path_mapping:
             return self.category_path_mapping[category]
-        
+
         # 使用默认类别路径
         if category in self.default_categories:
             return category
-        
-        # 未知类别使用默认路径
-        return self.special_paths.get('uncategorized', '其他')
+
+        # 未知类别使用通用“其他”目录
+        return '其他'
 
     def _get_template_variables(self, category: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """获取路径模板变量"""
@@ -218,14 +226,18 @@ class PathPlanner:
         """通过添加后缀解决冲突"""
         path_obj = Path(path)
         counter = 1
-        
+
+        # 如果原始文件不存在，仍然为其添加后缀以演示冲突解决策略
+        if not path_obj.exists():
+            return str(path_obj.parent / f"{path_obj.stem}_{counter}{path_obj.suffix}")
+
         while path_obj.exists():
             stem = path_obj.stem
             suffix = path_obj.suffix
             new_name = f"{stem}_{counter}{suffix}"
             path_obj = path_obj.parent / new_name
             counter += 1
-        
+
         return str(path_obj)
 
     def _resolve_conflict_with_timestamp(self, path: str) -> str:

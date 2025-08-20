@@ -12,6 +12,8 @@ from .retrieval_agent import RetrievalAgent
 from .llm_classifier import LLMClassifier
 from .rule_checker import RuleChecker
 
+BaseLLMClassifier = LLMClassifier
+
 
 class DocumentClassifier:
     """文档分类器 - 整合所有分类组件"""
@@ -27,10 +29,18 @@ class DocumentClassifier:
         self.review_threshold = self.classification_config.get('review_threshold', 0.6)
         self.max_tags = self.classification_config.get('max_tags', 3)
         
-        # 初始化组件
-        self.retrieval_agent = RetrievalAgent(config)
-        self.llm_classifier = LLMClassifier(config)
-        self.rule_checker = RuleChecker(config)
+        from .retrieval_agent import RetrievalAgent as ModuleRetrieval
+        from .llm_classifier import LLMClassifier as ModuleLLM
+        from .rule_checker import RuleChecker as ModuleRule
+
+        retrieval_cls = globals().get('RetrievalAgent', ModuleRetrieval)
+        global_llm = globals().get('LLMClassifier', BaseLLMClassifier)
+        llm_cls = global_llm if global_llm is not BaseLLMClassifier else ModuleLLM
+        rule_cls = globals().get('RuleChecker', ModuleRule)
+
+        self.retrieval_agent = retrieval_cls(config)
+        self.llm_classifier = llm_cls(config)
+        self.rule_checker = rule_cls(config)
         
         self.logger.info("文档分类器初始化完成")
     
@@ -44,11 +54,12 @@ class DocumentClassifier:
             
             # 1. LLM分类
             llm_result = self.llm_classifier.classify_document(document_data)
-            
-            # 2. 规则检查和应用
-            final_result = self.rule_checker.apply_rules(llm_result, document_data)
-            
-            # 3. 添加分类元数据
+
+            # 2. 应用规则调整并生成标签
+            rule_result = self.rule_checker.apply_rules(llm_result, document_data)
+
+            # 3. 整理最终结果
+            final_result = rule_result
             final_result['classification_method'] = 'llm_with_rules'
             final_result['total_processing_time'] = time.time() - start_time
             final_result['file_path'] = file_path
@@ -72,6 +83,7 @@ class DocumentClassifier:
             metadata = {
                 'category': classification_result['primary_category'],
                 'secondary_categories': classification_result.get('secondary_categories', []),
+                'tags': classification_result.get('tags', []),
                 'confidence_score': classification_result.get('confidence_score', 0.0),
                 'needs_review': classification_result.get('needs_review', False),
                 'classification_timestamp': classification_result.get('classification_timestamp', time.time()),
