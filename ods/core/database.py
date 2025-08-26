@@ -6,6 +6,7 @@
 
 import sqlite3
 import logging
+import shutil
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -304,11 +305,62 @@ class Database:
             return self.execute_query(query, (file_id, limit))
         else:
             query = '''
-                SELECT * FROM operation_logs 
-                ORDER BY created_at DESC 
+                SELECT * FROM operation_logs
+                ORDER BY created_at DESC
                 LIMIT ?
             '''
             return self.execute_query(query, (limit,))
+
+    def rollback_operation(self, operation_id: int) -> bool:
+        """根据操作日志回滚文件移动。
+
+        Args:
+            operation_id: 操作日志ID
+
+        Returns:
+            bool: 回滚是否成功
+        """
+        try:
+            with self.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute('SELECT * FROM operation_logs WHERE id = ?', (operation_id,))
+                row = cursor.fetchone()
+            if not row:
+                return False
+
+            old_path = row['old_path']
+            new_path = row['new_path']
+            if not old_path or not new_path:
+                return False
+
+            src = Path(new_path)
+            dst = Path(old_path)
+            if src.exists():
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(src), str(dst))
+
+            # 更新文件记录路径
+            self.execute_update(
+                'UPDATE files SET file_path = ?, updated_at = ? WHERE id = ?',
+                (old_path, datetime.now(), row['file_id'])
+            )
+
+            # 记录回滚操作
+            self.log_operation(row['file_id'], {
+                'operation_type': 'rollback',
+                'old_path': new_path,
+                'new_path': old_path,
+                'old_name': row['new_name'],
+                'new_name': row['old_name'],
+                'tags': [],
+                'success': True,
+                'error_message': ''
+            })
+            return True
+        except Exception as e:
+            self.logger.error(f"回滚操作失败: {e}")
+            return False
     
     def insert_feedback(self, feedback: Dict[str, Any]) -> int:
         """
