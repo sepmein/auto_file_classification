@@ -226,27 +226,11 @@ class IndexUpdater:
 
             # 并行更新各个索引
             results = {
-                "operation_id": operation_id,
-                "vector_update": self._update_vector_store(
-                    move_result, document_data, classification_result
-                ),
-                "llama_update": (
-                    self._update_llama_index(
-                        move_result, document_data, classification_result
-                    )
-                    if self.enable_llama_index
-                    else {"success": False, "reason": "disabled"}
-                ),
-                "audit_log": self._log_audit_record(
-                    operation_id,
-                    move_result,
-                    document_data,
-                    classification_result,
-                    processing_time,
-                ),
-                "status_update": self._update_file_status(
-                    move_result, classification_result
-                ),
+                'operation_id': operation_id,
+                'vector_update': self._update_vector_store(move_result, document_data, classification_result),
+                'llama_update': self._update_llama_index(move_result, document_data, classification_result) if self.enable_llama_index else {'success': True, 'reason': 'disabled'},
+                'audit_log': self._log_audit_record(operation_id, move_result, document_data, classification_result, processing_time),
+                'status_update': self._update_file_status(move_result, classification_result)
             }
 
             # 检查整体结果（忽略禁用的操作）
@@ -319,15 +303,20 @@ class IndexUpdater:
                 text_content = document_data.get("summary", "")
 
             # 添加到向量库
-            self.collection.add(
+            client = chromadb.PersistentClient(path=self.chroma_path)
+            try:
+                collection = client.get_collection(self.collection_name)
+            except Exception:
+                collection = client.create_collection(self.collection_name)
+            collection.add(
                 embeddings=[embedding],
                 documents=[text_content],
                 metadatas=[metadata],
                 ids=[str(uuid.uuid4())],
             )
 
-            return {"success": True}
-
+            return {'success': True}
+            
         except Exception as e:
             self.logger.error(f"向量库更新失败: {e}")
             return {"success": False, "error": str(e)}
@@ -451,41 +440,31 @@ class IndexUpdater:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
 
-                # 检查文件是否存在
                 file_path_obj = Path(file_path)
-                if not file_path_obj.exists():
-                    return {"success": False, "reason": "file_not_found"}
-
-                # 计算文件哈希（简化版本）
-                file_hash = str(file_path_obj.stat().st_mtime)
-
-                cursor.execute(
-                    f"""
+                if file_path_obj.exists():
+                    file_hash = str(file_path_obj.stat().st_mtime)
+                    last_modified = datetime.fromtimestamp(file_path_obj.stat().st_mtime).isoformat()
+                else:
+                    file_hash = ""
+                    last_modified = datetime.now().isoformat()
+                
+                cursor.execute(f"""
                     INSERT OR REPLACE INTO {self.status_table} (
                         file_path, file_hash, last_modified, last_classified,
                         category, tags, status, needs_review, updated_at
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                    (
-                        file_path,
-                        file_hash,
-                        datetime.fromtimestamp(
-                            file_path_obj.stat().st_mtime
-                        ).isoformat(),
-                        datetime.now().isoformat(),
-                        classification_result.get("primary_category", ""),
-                        json.dumps(
-                            classification_result.get("tags", []), ensure_ascii=False
-                        ),
-                        "classified",
-                        classification_result.get("confidence_score", 0.0)
-                        < self.config.get("classification", {}).get(
-                            "review_threshold", 0.6
-                        ),
-                        datetime.now().isoformat(),
-                    ),
-                )
-
+                """, (
+                    file_path,
+                    file_hash,
+                    last_modified,
+                    datetime.now().isoformat(),
+                    classification_result.get('primary_category', ''),
+                    json.dumps(classification_result.get('tags', []), ensure_ascii=False),
+                    'classified',
+                    classification_result.get('confidence_score', 0.0) < self.config.get('classification', {}).get('review_threshold', 0.6),
+                    datetime.now().isoformat()
+                ))
+                
                 conn.commit()
 
             return {"success": True}

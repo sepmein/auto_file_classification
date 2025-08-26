@@ -9,7 +9,11 @@ __version__ = "0.1.0"
 __author__ = "Auto File Classification Team"
 __email__ = "team@example.com"
 
-from .core.workflow import DocumentClassificationWorkflow
+try:
+    from .core.workflow import DocumentClassificationWorkflow
+except Exception:  # pragma: no cover - 依赖未安装时提供降级导入
+    DocumentClassificationWorkflow = None
+
 from .core.config import Config
 from .core.database import Database
 

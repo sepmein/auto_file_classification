@@ -81,18 +81,12 @@ class RetrievalAgent:
                 "text_chunk": text_chunk[:1000],  # 限制长度
                 **self._sanitize_metadata(metadata),
             }
-
-            # 添加到集合
-            # 确保embedding是列表格式
-            if isinstance(embedding, list):
-                embedding_list = embedding
-            elif hasattr(embedding, "tolist"):
-                embedding_list = embedding.tolist()
-            else:
-                embedding_list = list(embedding)
-
+            
+            emb = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
             self.collection.add(
-                embeddings=[embedding_list], metadatas=[doc_metadata], ids=[doc_id]
+                embeddings=[emb],
+                metadatas=[doc_metadata],
+                ids=[doc_id]
             )
 
             self.logger.info(f"文档 {doc_id} 已添加到向量数据库")
@@ -148,27 +142,24 @@ class RetrievalAgent:
 
             # 处理结果
             similar_docs = []
-            if results["ids"] and results["ids"][0]:
-                for i in range(len(results["ids"][0])):
-                    # 处理metadatas的不同格式 (列表的列表 vs 单个列表)
-                    if isinstance(results["metadatas"][0], list):
-                        metadata = results["metadatas"][0][i]
+            ids = results.get('ids', [])
+            metadatas = results.get('metadatas', [])
+            distances = results.get('distances', [])
+            if ids and ids[0]:
+                metadata_container = metadatas[0] if metadatas else []
+                for i in range(len(ids[0])):
+                    # 兼容Chroma不同版本返回的结构：可能是列表也可能是字典
+                    if isinstance(metadata_container, dict):
+                        metadata = metadata_container.get(ids[0][i], {})
                     else:
-                        # 处理测试中的格式：{doc_id: metadata}
-                        doc_id = results["ids"][0][i]
-                        metadata = results["metadatas"][0].get(doc_id, {})
-
+                        metadata = metadata_container[i]
+                    distance = distances[0][i] if distances and distances[0] else 0
                     doc_info = {
-                        "doc_id": results["ids"][0][i],
-                        "metadata": metadata,
-                        "distance": results["distances"][0][i],
-                        "similarity_score": 1
-                        - results["distances"][0][i],  # 转换为相似度分数
-                        "text_chunk": (
-                            metadata.get("text_chunk", "")
-                            if isinstance(metadata, dict)
-                            else ""
-                        ),
+                        'doc_id': ids[0][i],
+                        'metadata': metadata,
+                        'distance': distance,
+                        'similarity_score': 1 - distance,
+                        'text_chunk': metadata.get('text_chunk', '')
                     }
 
                     # 过滤低相似度结果

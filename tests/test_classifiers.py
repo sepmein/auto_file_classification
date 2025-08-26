@@ -222,8 +222,44 @@ class TestRuleChecker:
 
         result = self.rule_checker.apply_rules(classification_result, document_data)
 
-        assert result["primary_category"] == "工作"
-        assert result["confidence_score"] == 0.7
+        assert result['primary_category'] == '工作'
+        assert result['confidence_score'] == 0.7
+
+    def test_simple_rules_add_tag(self):
+        """测试简单规则添加标签"""
+        config = {
+            'rules': {
+                'enable_rules': False,
+                'simple_rules': [
+                    {'if_filename': '发票', 'add_tag': '发票'}
+                ]
+            }
+        }
+        rule_checker = RuleChecker(config)
+        classification_result = {'primary_category': '其他', 'confidence_score': 0.5}
+        document_data = {'file_path': '/test/发票123.pdf'}
+        result = rule_checker.apply_rules(classification_result, document_data)
+        assert '发票' in result['tags']
+
+    def test_simple_rules_require_review(self):
+        """测试标签组合触发审核"""
+        config = {
+            'rules': {
+                'enable_rules': False,
+                'simple_rules': [
+                    {'if_tag_combo': ['保密', '财务'], 'action': 'require_review'}
+                ]
+            }
+        }
+        rule_checker = RuleChecker(config)
+        classification_result = {
+            'primary_category': '财务',
+            'secondary_categories': ['保密'],
+            'confidence_score': 0.9
+        }
+        document_data = {'file_path': '/test/document.pdf'}
+        result = rule_checker.apply_rules(classification_result, document_data)
+        assert result['needs_review'] is True
 
 
 class TestDocumentClassifier:

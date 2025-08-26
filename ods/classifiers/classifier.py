@@ -12,6 +12,8 @@ from .retrieval_agent import RetrievalAgent
 from .llm_classifier import LLMClassifier
 from .rule_checker import RuleChecker
 
+BaseLLMClassifier = LLMClassifier
+
 
 class DocumentClassifier:
     """文档分类器 - 整合所有分类组件"""
@@ -21,21 +23,25 @@ class DocumentClassifier:
         self.logger = logging.getLogger(__name__)
 
         # 分类配置
-        self.classification_config = config.get("classification", {})
-        self.categories = self.classification_config.get(
-            "categories", ["工作", "个人", "财务", "其他"]
-        )
-        self.confidence_threshold = self.classification_config.get(
-            "confidence_threshold", 0.8
-        )
-        self.review_threshold = self.classification_config.get("review_threshold", 0.6)
-        self.max_tags = self.classification_config.get("max_tags", 3)
+        self.classification_config = config.get('classification', {})
+        self.categories = self.classification_config.get('categories', ['工作', '个人', '财务', '其他'])
+        self.confidence_threshold = self.classification_config.get('confidence_threshold', 0.8)
+        self.review_threshold = self.classification_config.get('review_threshold', 0.6)
+        self.max_tags = self.classification_config.get('max_tags', 3)
+        
+        from .retrieval_agent import RetrievalAgent as ModuleRetrieval
+        from .llm_classifier import LLMClassifier as ModuleLLM
+        from .rule_checker import RuleChecker as ModuleRule
 
-        # 初始化组件
-        self.retrieval_agent = RetrievalAgent(config)
-        self.llm_classifier = LLMClassifier(config)
-        self.rule_checker = RuleChecker(config)
+        retrieval_cls = globals().get('RetrievalAgent', ModuleRetrieval)
+        global_llm = globals().get('LLMClassifier', BaseLLMClassifier)
+        llm_cls = global_llm if global_llm is not BaseLLMClassifier else ModuleLLM
+        rule_cls = globals().get('RuleChecker', ModuleRule)
 
+        self.retrieval_agent = retrieval_cls(config)
+        self.llm_classifier = llm_cls(config)
+        self.rule_checker = rule_cls(config)
+        
         self.logger.info("文档分类器初始化完成")
 
     def classify_document(self, document_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -49,14 +55,15 @@ class DocumentClassifier:
             # 1. LLM分类
             llm_result = self.llm_classifier.classify_document(document_data)
 
-            # 2. 规则检查和应用
-            final_result = self.rule_checker.apply_rules(llm_result, document_data)
+            # 2. 应用规则调整并生成标签
+            rule_result = self.rule_checker.apply_rules(llm_result, document_data)
 
-            # 3. 添加分类元数据
-            final_result["classification_method"] = "llm_with_rules"
-            final_result["total_processing_time"] = time.time() - start_time
-            final_result["file_path"] = file_path
-
+            # 3. 整理最终结果
+            final_result = rule_result
+            final_result['classification_method'] = 'llm_with_rules'
+            final_result['total_processing_time'] = time.time() - start_time
+            final_result['file_path'] = file_path
+            
             # 4. 如果分类成功，添加到向量数据库
             if (
                 final_result.get("primary_category")
@@ -80,18 +87,15 @@ class DocumentClassifier:
         try:
             # 准备元数据
             metadata = {
-                "category": classification_result["primary_category"],
-                "secondary_categories": classification_result.get(
-                    "secondary_categories", []
-                ),
-                "confidence_score": classification_result.get("confidence_score", 0.0),
-                "needs_review": classification_result.get("needs_review", False),
-                "classification_timestamp": classification_result.get(
-                    "classification_timestamp", time.time()
-                ),
-                "file_path": document_data.get("file_path", ""),
-                "file_size": document_data.get("metadata", {}).get("size", 0),
-                "file_type": Path(document_data.get("file_path", "")).suffix.lower(),
+                'category': classification_result['primary_category'],
+                'secondary_categories': classification_result.get('secondary_categories', []),
+                'tags': classification_result.get('tags', []),
+                'confidence_score': classification_result.get('confidence_score', 0.0),
+                'needs_review': classification_result.get('needs_review', False),
+                'classification_timestamp': classification_result.get('classification_timestamp', time.time()),
+                'file_path': document_data.get('file_path', ''),
+                'file_size': document_data.get('metadata', {}).get('size', 0),
+                'file_type': Path(document_data.get('file_path', '')).suffix.lower()
             }
 
             # 获取嵌入向量

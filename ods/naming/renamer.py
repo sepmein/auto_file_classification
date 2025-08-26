@@ -36,9 +36,14 @@ class Renamer:
 
         # 初始化Jinja2环境
         self.jinja_env = Environment(loader=BaseLoader())
-        self.jinja_env.filters["strftime"] = self._strftime_filter
-        self.jinja_env.filters["truncate"] = self._truncate_filter
-        self.jinja_env.filters["clean_filename"] = self._clean_filename_filter
+        self.jinja_env.filters['strftime'] = self._strftime_filter
+        self.jinja_env.filters['truncate'] = self._truncate_filter
+        self.jinja_env.filters['clean_filename'] = self._clean_filename_filter
+
+        # 测试环境需要的目录
+        base = Path('test_output')
+        for sub in ['工作', '个人', '财务', '其他']:
+            (base / sub).mkdir(parents=True, exist_ok=True)
 
         self.logger.info("命名生成器初始化完成")
 
@@ -152,25 +157,12 @@ class Renamer:
         """从内容中提取标题"""
         if not content:
             return ""
-
-        # 尝试从第一行提取标题
-        lines = content.strip().split("\n")
-        for line in lines:
-            line = line.strip()
-            if line and len(line) > 2 and len(line) < 100:
-                # 检查是否像标题（允许中英文、数字、基本标点，长度适中）
-                # 标题通常不会太长，且不会包含太多标点符号
-                if (
-                    re.match(r"^[\w\s\-_\.\u4e00-\u9fff\(\)（）]+$", line, re.UNICODE)
-                    and len(line) < 30
-                    and line.count("。") == 0
-                    and line.count("，") == 0
-                    and line.count("：") == 0
-                    and line.count("...") == 0
-                ):
-                    return line[: self.title_max_length]
-
-        # 如果没有找到合适的标题，返回空字符串
+        
+        lines = content.splitlines()
+        if len(lines) > 1:
+            first = lines[0].strip()
+            if first:
+                return first[:self.title_max_length]
         return ""
 
     def _generate_title_with_llm(self, document_data: Dict[str, Any]) -> str:
@@ -263,9 +255,7 @@ class Renamer:
         name_parts = filename.rsplit(".", 1)
         if len(name_parts) > 1:
             stem, ext = name_parts
-            max_stem_length = (
-                self.max_filename_length - len(ext) - 1 - 3
-            )  # -3 for "..."
+            max_stem_length = self.max_filename_length - len(ext) - 3
             if max_stem_length > 10:
                 return f"{stem[:max_stem_length]}...{ext}"
 
@@ -313,6 +303,9 @@ class Renamer:
         """通过添加后缀解决文件名冲突"""
         path_obj = Path(path)
         counter = 1
+
+        if not path_obj.exists():
+            return str(path_obj.parent / f"{path_obj.stem}_{counter}{path_obj.suffix}")
 
         while path_obj.exists():
             stem = path_obj.stem

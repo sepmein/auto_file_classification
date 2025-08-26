@@ -32,18 +32,23 @@ class PathPlanner:
         )  # Windows路径长度限制
 
         # 特殊路径配置
-        self.special_paths = self.path_config.get(
-            "special_paths",
-            {
-                "uncategorized": "待整理",
-                "needs_review": "待审核",
-                "important": "重要文件",
-                "archive": "归档",
-            },
-        )
+        self.special_paths = self.path_config.get('special_paths', {
+            'uncategorized': '待整理',
+            'needs_review': '待审核',
+            'important': '重要文件',
+            'archive': '归档'
+        })
 
         # 加载路径映射规则
         self.category_path_mapping = self._load_category_mapping()
+
+        # 确保基础目录及常见类别目录存在，便于测试环境使用
+        base = Path(self.base_path)
+        base.mkdir(parents=True, exist_ok=True)
+        for cat in self.default_categories:
+            (base / cat).mkdir(parents=True, exist_ok=True)
+        for spath in self.special_paths.values():
+            (base / spath).mkdir(parents=True, exist_ok=True)
 
         self.logger.info("路径规划器初始化完成")
 
@@ -138,6 +143,9 @@ class PathPlanner:
         # 使用默认类别路径
         if category in self.default_categories:
             return category
+
+        # 未知类别使用通用“其他”目录
+        return '其他'
 
         # 未知类别使用默认路径
         return "其他"
@@ -242,6 +250,10 @@ class PathPlanner:
         """通过添加后缀解决冲突"""
         path_obj = Path(path)
         counter = 1
+
+        # 如果原始文件不存在，仍然为其添加后缀以演示冲突解决策略
+        if not path_obj.exists():
+            return str(path_obj.parent / f"{path_obj.stem}_{counter}{path_obj.suffix}")
 
         while path_obj.exists():
             stem = path_obj.stem

@@ -4,7 +4,11 @@
 包含系统的主要组件：工作流引擎、配置管理、数据库操作等
 """
 
-from .workflow import DocumentClassificationWorkflow
+try:
+    from .workflow import DocumentClassificationWorkflow
+except Exception:  # pragma: no cover
+    DocumentClassificationWorkflow = None
+
 from .config import Config
 from .database import Database
 
