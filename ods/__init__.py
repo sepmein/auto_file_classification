@@ -15,6 +15,6 @@ from .core.database import Database
 
 __all__ = [
     "DocumentClassificationWorkflow",
-    "Config", 
+    "Config",
     "Database",
 ]

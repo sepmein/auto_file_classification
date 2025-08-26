@@ -3,196 +3,170 @@
 ## 目录结构
 
 ```
-auto_file_classification_2/
-├── ods/                        # 核心模块包
-│   ├── __init__.py            # 主模块入口
-│   ├── cli.py                 # 命令行界面
-│   ├── core/                  # 核心功能模块
-│   │   ├── __init__.py
-│   │   ├── config.py          # 配置管理
-│   │   ├── database.py        # 数据库操作
-│   │   └── workflow.py        # LangGraph工作流引擎
-│   ├── parsers/               # 文档解析器模块
-│   │   ├── __init__.py
-│   │   ├── base_parser.py     # 基础解析器抽象类
-│   │   ├── document_parser.py # 主文档解析器
-│   │   ├── pdf_parser.py      # PDF解析器
-│   │   ├── office_parser.py   # Office文档解析器
-│   │   ├── text_parser.py     # 文本文件解析器
-│   │   └── ocr_parser.py      # OCR图片解析器
-│   ├── classifiers/           # 分类器模块（占位符）
-│   │   ├── __init__.py
-│   │   └── classifier.py
-│   ├── rules/                 # 规则引擎模块（占位符）
-│   │   ├── __init__.py
-│   │   └── rule_engine.py
-│   ├── storage/               # 存储管理模块（占位符）
-│   │   ├── __init__.py
-│   │   ├── file_mover.py
-│   │   └── index_updater.py
-│   └── utils/                 # 工具函数模块
-│       └── __init__.py
-├── config/                    # 配置文件
-│   └── rules.yaml            # 默认配置文件
-├── tests/                     # 测试文件
+auto_file_classification/
+├── ods/                    # 核心模块包
 │   ├── __init__.py
-│   └── test_parsers.py       # 解析器测试
-├── examples/                  # 使用示例
-│   └── basic_usage.py        # 基本使用示例
-├── docs/                      # 文档（未创建）
-├── scripts/                   # 脚本工具（未创建）
-├── requirements.txt           # Python依赖
-├── pyproject.toml            # 项目配置
-├── README.md                 # 项目说明
-├── .gitignore               # Git忽略文件
-├── project_plan.md          # 项目计划文档
-└── PROJECT_STRUCTURE.md     # 本文件
+│   ├── __main__.py         # 模块入口点
+│   ├── cli.py              # 命令行界面
+│   ├── core/               # 核心功能模块
+│   │   ├── __init__.py
+│   │   ├── config.py       # 配置管理
+│   │   ├── database.py     # 数据库操作
+│   │   └── workflow.py     # LangGraph工作流引擎
+│   ├── parsers/            # 文档解析器
+│   │   ├── __init__.py
+│   │   ├── base_parser.py  # 解析器基类
+│   │   ├── document_parser.py  # 通用文档解析器
+│   │   ├── pdf_parser.py   # PDF解析器
+│   │   ├── office_parser.py    # Office文档解析器
+│   │   ├── text_parser.py  # 文本文件解析器
+│   │   └── ocr_parser.py   # OCR图像解析器
+│   ├── classifiers/        # 分类器模块
+│   │   ├── __init__.py
+│   │   ├── classifier.py   # 分类器基类
+│   │   ├── llm_classifier.py   # LLM分类器
+│   │   ├── retrieval_agent.py  # 检索代理
+│   │   └── rule_checker.py     # 规则检查器
+│   ├── rules/              # 规则引擎
+│   │   ├── __init__.py
+│   │   └── rule_engine.py  # 规则引擎核心
+│   ├── storage/            # 存储管理
+│   │   ├── __init__.py
+│   │   ├── file_mover.py   # 文件移动器
+│   │   └── index_updater.py    # 索引更新器
+│   ├── naming/             # 命名管理
+│   │   ├── __init__.py
+│   │   └── renamer.py      # 文件重命名器
+│   ├── path_planner/       # 路径规划
+│   │   ├── __init__.py
+│   │   └── path_planner.py # 路径规划器
+│   ├── embeddings/         # 嵌入模型（待实现）
+│   │   └── __init__.py
+│   └── utils/              # 工具函数（待实现）
+│       └── __init__.py
+├── config/                  # 配置文件目录
+│   ├── category_mapping.yaml   # 分类映射规则
+│   ├── naming_templates.yaml   # 文件命名模板
+│   └── rules.yaml             # 主配置文件
+├── tests/                   # 测试文件目录
+│   ├── __init__.py
+│   ├── test_classifiers.py    # 分类器测试
+│   ├── test_embeddings.py     # 嵌入模型测试
+│   ├── test_file_mover.py     # 文件移动器测试
+│   ├── test_index_updater.py  # 索引更新器测试
+│   ├── test_parsers.py        # 解析器测试
+│   ├── test_path_planner.py   # 路径规划器测试
+│   ├── test_renamer.py        # 重命名器测试
+│   └── test_stage1_e2e.py    # 端到端测试
+├── docs/                    # 项目文档
+│   ├── README.md               # 文档目录说明
+│   ├── classification_module.md    # 分类模块文档
+│   ├── embeddings_module.md       # 嵌入模块文档
+│   ├── index_updater_module.md    # 索引更新模块文档
+│   ├── naming_module.md           # 命名模块文档
+│   ├── path_planning_module.md    # 路径规划模块文档
+│   ├── ollama_setup.md            # Ollama设置指南
+│   └── classification_implementation_summary.md  # 实现总结
+├── examples/                # 示例代码
+│   ├── README.md               # 示例说明
+│   ├── classification_demo.py  # 分类演示
+│   ├── embedding_demo.py       # 嵌入演示
+│   ├── index_updater_demo.py   # 索引更新演示
+│   ├── naming_demo.py          # 命名演示
+│   └── path_planning_demo.py   # 路径规划演示
+├── data/                    # 数据目录
+│   ├── chroma_db/             # ChromaDB向量数据库
+│   └── llama_index/           # LlamaIndex索引数据
+├── real_test_documents/     # 真实测试文档
+├── test_documents/          # 测试文档
+├── OneDrive/                # OneDrive同步目录
+├── pyproject.toml           # 项目配置文件
+├── PROJECT_STRUCTURE.md     # 项目结构说明
+├── project_plan.md          # 项目计划
+└── README.md                # 项目主文档
 ```
 
 ## 模块说明
 
 ### 核心模块 (ods/core/)
 
-- **config.py**: 配置管理器，负责加载、验证和管理系统配置
-- **database.py**: SQLite数据库管理，处理文件索引、分类结果和操作日志
-- **workflow.py**: LangGraph工作流引擎，协调各个模块的执行
+- **config.py**: 配置管理，支持YAML配置文件和环境变量
+- **database.py**: 数据库操作，包括SQLite和向量数据库
+- **workflow.py**: LangGraph工作流引擎，协调各个模块
 
 ### 解析器模块 (ods/parsers/)
 
-内容提取模块的完整实现，支持多种文档格式：
-
-- **base_parser.py**: 定义解析器抽象接口和通用功能
-- **document_parser.py**: 主解析器，根据文件类型自动选择合适的解析器
-- **pdf_parser.py**: PDF文档解析，使用pdfminer.six提取文本和元数据
+- **base_parser.py**: 所有解析器的基类，定义通用接口
+- **document_parser.py**: 通用文档解析器，支持多种格式
+- **pdf_parser.py**: PDF文档解析，使用pdfminer.six
 - **office_parser.py**: Office文档解析，支持Word、PowerPoint、Excel
-- **text_parser.py**: 文本文件解析，支持多种编码和格式
-- **ocr_parser.py**: OCR图片解析，使用Tesseract提取图片中的文字
+- **text_parser.py**: 纯文本文件解析
+- **ocr_parser.py**: 图像OCR解析，使用Tesseract
+
+### 分类器模块 (ods/classifiers/)
+
+- **classifier.py**: 分类器基类，定义分类接口
+- **llm_classifier.py**: 基于LLM的分类器
+- **retrieval_agent.py**: 检索增强分类代理
+- **rule_checker.py**: 基于规则的分类检查器
+
+### 存储模块 (ods/storage/)
+
+- **file_mover.py**: 文件移动和重命名操作
+- **index_updater.py**: 向量索引和数据库更新
 
 ### 其他模块
 
-- **classifiers/**: 分类器模块（当前为占位符实现）
-- **rules/**: 规则引擎模块（当前为占位符实现）
-- **storage/**: 存储管理模块（当前为占位符实现）
-- **utils/**: 工具函数模块
+- **naming/**: 智能文件命名生成
+- **path_planner/**: 文件路径规划和目录结构管理
+- **rules/**: 可配置的分类和移动规则引擎
 
-## 已实现功能
+## 配置文件说明
 
-### ✅ 内容提取模块
-- [x] 基础解析器框架
-- [x] PDF文档解析（pdfminer.six）
-- [x] Office文档解析（python-docx, python-pptx, openpyxl）
-- [x] 文本文件解析（支持多种编码）
-- [x] OCR图片解析（Tesseract）
-- [x] 统一解析器接口
-- [x] 错误处理和日志记录
-- [x] 批量解析支持
-- [x] 文档元数据提取
+### rules.yaml (主配置文件)
 
-### ✅ 配置管理
-- [x] YAML配置文件支持
-- [x] 配置验证和默认值
-- [x] 多层级配置结构
-- [x] 配置文件自动创建
+- LLM服务配置
+- 嵌入模型设置
+- 数据库配置
+- 分类规则
+- 文件处理参数
+- 系统设置
 
-### ✅ 数据库管理
-- [x] SQLite数据库设计
-- [x] 文件索引表
-- [x] 分类结果表
-- [x] 操作日志表
-- [x] 用户反馈表
+### category_mapping.yaml
 
-### ✅ 命令行界面
-- [x] 基础CLI命令
-- [x] 文件解析测试功能
-- [x] 系统信息查看
-- [x] 配置管理命令
+- 分类映射规则
+- 标签关联关系
+- 优先级设置
 
-## 待实现功能
+### naming_templates.yaml
 
-### 🔲 分类器模块
-- [ ] LLM集成（OpenAI/Claude/Ollama）
-- [ ] 向量嵌入模型集成
-- [ ] ChromaDB向量数据库
-- [ ] LlamaIndex文档索引
-- [ ] 多标签分类支持
+- 文件命名模板
+- 变量定义
+- 冲突解决策略
 
-### 🔲 规则引擎
-- [ ] 规则解析和执行
-- [ ] Jinja2模板支持
-- [ ] 条件匹配逻辑
-- [ ] 规则优先级管理
+## 测试结构
 
-### 🔲 存储管理
-- [ ] 文件移动和重命名
-- [ ] 多视图软链接创建
-- [ ] 路径冲突处理
-- [ ] 审计和回滚功能
+测试文件按模块组织，每个模块都有对应的测试文件：
 
-### 🔲 工作流集成
-- [ ] LangGraph节点连接
-- [ ] 错误恢复机制
-- [ ] 并行处理支持
-- [ ] 进度监控
+- 单元测试覆盖核心功能
+- 集成测试验证模块间协作
+- 端到端测试验证完整工作流
 
-## 技术特性
+## 示例代码
 
-### 文档解析能力
-- **多格式支持**: PDF、Word、PowerPoint、Excel、文本、图片
-- **智能编码检测**: 自动检测文本文件编码
-- **元数据提取**: 提取文档标题、作者、创建时间等信息
-- **OCR支持**: 从图片和扫描PDF中提取文字
-- **错误恢复**: 多层级的错误处理和备用方案
+示例代码展示各模块的使用方法：
 
-### 系统设计
-- **模块化架构**: 清晰的模块分离，便于扩展和维护
-- **配置驱动**: 通过YAML配置文件控制系统行为
-- **日志记录**: 完整的操作日志和错误追踪
-- **测试覆盖**: 单元测试和集成测试支持
+- 基础用法演示
+- 高级功能展示
+- 配置示例
+- 最佳实践
 
-## 使用方法
+## 文档结构
 
-### 安装依赖
-```bash
-pip install -r requirements.txt
-```
+文档按模块组织，包含：
 
-### 初始化系统
-```bash
-python -m ods init
-```
-
-### 解析文档
-```bash
-python -m ods parse path/to/document.pdf
-```
-
-### 查看系统信息
-```bash
-python -m ods info
-```
-
-### 运行示例
-```bash
-python examples/basic_usage.py
-```
-
-### 运行测试
-```bash
-pytest tests/
-```
-
-## 开发计划
-
-按照项目计划文档，后续将按以下阶段继续开发：
-
-1. **阶段2**: 多标签支持与改进
-   - 实现LLM分类器
-   - 添加向量数据库支持
-   - 实现多标签分类和交叉分类
-
-2. **阶段3**: 规则引擎扩展与高级功能
-   - 完善规则引擎
-   - 实现文件移动和重命名
-   - 添加审计和回滚功能
-
-目前已完成阶段1的核心内容提取模块，为后续功能实现奠定了坚实基础。
+- 模块设计说明
+- API接口文档
+- 使用示例
+- 配置指南
+- 部署说明

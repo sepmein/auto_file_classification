@@ -74,7 +74,9 @@ class DocumentClassificationWorkflow:
             file_path = state["file_path"]
             content = self.document_parser.parse(file_path)
             state["parsed_content"] = content
-            state["parse_success"] = True
+            state["parse_success"] = content.success  # Check the actual parse result
+            if not content.success:
+                state["error"] = content.error or "解析失败"
         except Exception as e:
             self.logger.error(f"文档解析失败: {e}")
             state["parse_success"] = False
@@ -100,28 +102,40 @@ class DocumentClassificationWorkflow:
             # 生成嵌入向量
             embedding_result = self.embedder.process_document(document_data)
 
-            if embedding_result['status'] == 'success':
-                state["embedding"] = embedding_result['embedding']
-                state["embedding_summary"] = embedding_result['summary']
-                state["embedding_keywords"] = embedding_result['keywords']
-                state["embedding_metadata"] = embedding_result['embedding_metadata']
+            if embedding_result["status"] == "success":
+                state["embedding"] = embedding_result["embedding"]
+                state["embedding_summary"] = embedding_result["summary"]
+                state["embedding_keywords"] = embedding_result["keywords"]
+                state["embedding_metadata"] = embedding_result["embedding_metadata"]
                 state["embedding_success"] = True
                 self.logger.info(f"嵌入生成成功: {file_path}")
             else:
                 state["embedding_success"] = False
-                state["embedding_error"] = embedding_result.get('error_message', '未知错误')
+                state["embedding_error"] = embedding_result.get(
+                    "error_message", "未知错误"
+                )
                 self.logger.error(f"嵌入生成失败: {file_path}")
 
         except Exception as e:
             self.logger.error(f"嵌入生成失败: {e}")
             state["embedding_success"] = False
-            state["error"] = str(e)
+            state["embedding_error"] = str(e)
+            # 对于解析失败的文件，设置一个默认状态
+            if not state.get("parse_success", False):
+                state["classification"] = {
+                    "primary_category": "解析失败",
+                    "confidence_score": 0.0,
+                    "needs_review": True,
+                }
+                state["classify_success"] = True  # 标记为成功但需要审核
 
         return state
 
     def _classify_document(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """分类文档节点"""
-        if not state.get("parse_success", False) or not state.get("embedding_success", False):
+        if not state.get("parse_success", False) or not state.get(
+            "embedding_success", False
+        ):
             return state
 
         try:
@@ -142,10 +156,12 @@ class DocumentClassificationWorkflow:
             # 执行分类
             classification_result = self.classifier.classify_document(document_data)
 
-            if classification_result.get('primary_category'):
+            if classification_result.get("primary_category"):
                 state["classification"] = classification_result
                 state["classify_success"] = True
-                self.logger.info(f"文档分类成功: {file_path} -> {classification_result['primary_category']}")
+                self.logger.info(
+                    f"文档分类成功: {file_path} -> {classification_result['primary_category']}"
+                )
             else:
                 state["classify_success"] = False
                 state["classification_error"] = "分类结果为空"
@@ -212,7 +228,7 @@ class DocumentClassificationWorkflow:
                     )
             else:
                 state["plan_success"] = False
-                state["plan_error"] = path_plan.get('error_message', '路径规划失败')
+                state["plan_error"] = path_plan.get("error_message", "路径规划失败")
                 self.logger.warning(f"路径规划失败: {file_path}")
 
         except Exception as e:
@@ -246,13 +262,17 @@ class DocumentClassificationWorkflow:
                 path_plan, document_data, classification_result
             )
 
-            if naming_result.get('status') == 'generated':
+            if naming_result.get("status") == "generated":
                 state["naming_result"] = naming_result
                 state["naming_success"] = True
-                self.logger.info(f"命名生成成功: {file_path} -> {naming_result['new_filename']}")
+                self.logger.info(
+                    f"命名生成成功: {file_path} -> {naming_result['new_filename']}"
+                )
             else:
                 state["naming_success"] = False
-                state["naming_error"] = naming_result.get('error_message', '命名生成失败')
+                state["naming_error"] = naming_result.get(
+                    "error_message", "命名生成失败"
+                )
                 self.logger.warning(f"命名生成失败: {file_path}")
 
         except Exception as e:
@@ -300,7 +320,11 @@ class DocumentClassificationWorkflow:
 
     def _move_file(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """移动文件节点"""
-        if not state.get("rules_success", False) or not state.get("naming_success", False) or not state.get("plan_success", False):
+        if (
+            not state.get("rules_success", False)
+            or not state.get("naming_success", False)
+            or not state.get("plan_success", False)
+        ):
             return state
 
         try:
@@ -347,7 +371,9 @@ class DocumentClassificationWorkflow:
             state["index_updated"] = update_result.get("success", False)
 
             if update_result.get("success", False):
-                self.logger.info(f"索引更新成功: {move_result.get('original_path', '')}")
+                self.logger.info(
+                    f"索引更新成功: {move_result.get('original_path', '')}"
+                )
             else:
                 self.logger.warning(f"索引更新失败: {update_result.get('error', '')}")
 

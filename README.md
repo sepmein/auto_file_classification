@@ -64,6 +64,48 @@ python -m ods info
 python -m ods parse /path/to/document.pdf
 ```
 
+## LLM配置
+
+系统支持多种LLM提供商，默认使用本地Ollama：
+
+### 使用Ollama（推荐）
+
+```bash
+# 1. 安装Ollama
+# Windows: winget install Ollama.Ollama
+# macOS: brew install ollama  
+# Linux: curl -fsSL https://ollama.ai/install.sh | sh
+
+# 2. 启动Ollama服务
+ollama serve
+
+# 3. 下载模型
+ollama pull llama3.2:1b  # 轻量级模型
+ollama pull qwen2.5:3b   # 平衡性能
+
+# 4. 测试连接
+python test_ollama.py
+```
+
+### 使用其他LLM提供商
+
+编辑 `rules.yaml` 文件：
+
+```yaml
+llm:
+  # 使用OpenAI
+  provider: openai
+  model: gpt-4o-mini
+  api_key: your_openai_api_key_here
+  
+  # 或使用Claude
+  # provider: claude  
+  # model: claude-3-haiku-20240307
+  # api_key: your_anthropic_api_key_here
+```
+
+详细配置说明请参考 [Ollama设置指南](docs/ollama_setup.md)。
+
 ## 项目结构
 
 ```

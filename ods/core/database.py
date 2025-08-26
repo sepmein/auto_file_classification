@@ -13,37 +13,38 @@ from datetime import datetime
 
 class Database:
     """数据库管理器"""
-    
+
     def __init__(self, config: Dict[str, Any]):
         """
         初始化数据库管理器
-        
+
         Args:
             config: 配置字典
         """
         self.config = config
         self.logger = logging.getLogger(__name__)
-        
+
         # 数据库配置
         db_config = config.get("database", {})
         self.db_path = db_config.get("path", ".ods/db.sqlite")
-        
+
         # 确保数据库目录存在
         db_dir = Path(self.db_path).parent
         db_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # 初始化数据库
         self._init_database()
-        
+
         self.logger.info(f"数据库初始化完成: {self.db_path}")
-    
+
     def _init_database(self) -> None:
         """初始化数据库表"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            
+
             # 文件表
-            cursor.execute('''
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS files (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     file_path TEXT UNIQUE NOT NULL,
@@ -57,10 +58,12 @@ class Database:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
-            ''')
-            
+            """
+            )
+
             # 分类结果表
-            cursor.execute('''
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS classifications (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     file_id INTEGER,
@@ -71,10 +74,12 @@ class Database:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (file_id) REFERENCES files (id)
                 )
-            ''')
-            
+            """
+            )
+
             # 操作日志表
-            cursor.execute('''
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS operation_logs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     file_id INTEGER,
@@ -89,10 +94,12 @@ class Database:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (file_id) REFERENCES files (id)
                 )
-            ''')
-            
+            """
+            )
+
             # 用户反馈表
-            cursor.execute('''
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS user_feedback (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     file_id INTEGER,
@@ -104,36 +111,47 @@ class Database:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (file_id) REFERENCES files (id)
                 )
-            ''')
-            
+            """
+            )
+
             # 创建索引
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_files_path ON files (file_path)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_files_status ON files (status)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_classifications_file_id ON classifications (file_id)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_operation_logs_file_id ON operation_logs (file_id)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_operation_logs_type ON operation_logs (operation_type)')
-            
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_files_path ON files (file_path)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_files_status ON files (status)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_classifications_file_id ON classifications (file_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_operation_logs_file_id ON operation_logs (file_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_operation_logs_type ON operation_logs (operation_type)"
+            )
+
             conn.commit()
-    
+
     def get_connection(self) -> sqlite3.Connection:
         """
         获取数据库连接
-        
+
         Returns:
             sqlite3.Connection: 数据库连接
         """
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row  # 使结果可以按列名访问
         return conn
-    
+
     def execute_query(self, query: str, params: tuple = ()) -> List[sqlite3.Row]:
         """
         执行查询语句
-        
+
         Args:
             query: SQL查询语句
             params: 查询参数
-            
+
         Returns:
             List[sqlite3.Row]: 查询结果
         """
@@ -141,15 +159,15 @@ class Database:
             cursor = conn.cursor()
             cursor.execute(query, params)
             return cursor.fetchall()
-    
+
     def execute_update(self, query: str, params: tuple = ()) -> int:
         """
         执行更新语句
-        
+
         Args:
             query: SQL更新语句
             params: 更新参数
-            
+
         Returns:
             int: 受影响的行数
         """
@@ -158,233 +176,243 @@ class Database:
             cursor.execute(query, params)
             conn.commit()
             return cursor.rowcount
-    
+
     def insert_file(self, file_path: str, file_info: Dict[str, Any]) -> int:
         """
         插入文件记录
-        
+
         Args:
             file_path: 文件路径
             file_info: 文件信息
-            
+
         Returns:
             int: 插入记录的ID
         """
-        query = '''
+        query = """
             INSERT INTO files (file_path, file_name, file_size, file_extension, 
                              creation_time, modification_time, last_processed)
             VALUES (?, ?, ?, ?, ?, ?, ?)
-        '''
+        """
         params = (
             file_path,
-            file_info.get('file_name', ''),
-            file_info.get('file_size', 0),
-            file_info.get('file_extension', ''),
-            file_info.get('creation_time'),
-            file_info.get('modification_time'),
-            datetime.now()
+            file_info.get("file_name", ""),
+            file_info.get("file_size", 0),
+            file_info.get("file_extension", ""),
+            file_info.get("creation_time"),
+            file_info.get("modification_time"),
+            datetime.now(),
         )
-        
+
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(query, params)
             conn.commit()
             return cursor.lastrowid
-    
+
     def update_file_status(self, file_id: int, status: str) -> None:
         """
         更新文件状态
-        
+
         Args:
             file_id: 文件ID
             status: 新状态
         """
-        query = 'UPDATE files SET status = ?, updated_at = ? WHERE id = ?'
+        query = "UPDATE files SET status = ?, updated_at = ? WHERE id = ?"
         self.execute_update(query, (status, datetime.now(), file_id))
-    
+
     def get_file_by_path(self, file_path: str) -> Optional[sqlite3.Row]:
         """
         根据路径获取文件记录
-        
+
         Args:
             file_path: 文件路径
-            
+
         Returns:
             Optional[sqlite3.Row]: 文件记录
         """
-        query = 'SELECT * FROM files WHERE file_path = ?'
+        query = "SELECT * FROM files WHERE file_path = ?"
         results = self.execute_query(query, (file_path,))
         return results[0] if results else None
-    
-    def insert_classification(self, file_id: int, classification: Dict[str, Any]) -> int:
+
+    def insert_classification(
+        self, file_id: int, classification: Dict[str, Any]
+    ) -> int:
         """
         插入分类结果
-        
+
         Args:
             file_id: 文件ID
             classification: 分类结果
-            
+
         Returns:
             int: 插入记录的ID
         """
         import json
-        
-        query = '''
+
+        query = """
             INSERT INTO classifications (file_id, category, confidence, tags, parser_type)
             VALUES (?, ?, ?, ?, ?)
-        '''
+        """
         params = (
             file_id,
-            classification.get('category', ''),
-            classification.get('confidence', 0.0),
-            json.dumps(classification.get('tags', []), ensure_ascii=False),
-            classification.get('parser_type', '')
+            classification.get("category", ""),
+            classification.get("confidence", 0.0),
+            json.dumps(classification.get("tags", []), ensure_ascii=False),
+            classification.get("parser_type", ""),
         )
-        
+
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(query, params)
             conn.commit()
             return cursor.lastrowid
-    
+
     def log_operation(self, file_id: int, operation: Dict[str, Any]) -> int:
         """
         记录操作日志
-        
+
         Args:
             file_id: 文件ID
             operation: 操作信息
-            
+
         Returns:
             int: 插入记录的ID
         """
         import json
-        
-        query = '''
+
+        query = """
             INSERT INTO operation_logs (file_id, operation_type, old_path, new_path,
                                       old_name, new_name, tags, success, error_message)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        '''
+        """
         params = (
             file_id,
-            operation.get('operation_type', ''),
-            operation.get('old_path', ''),
-            operation.get('new_path', ''),
-            operation.get('old_name', ''),
-            operation.get('new_name', ''),
-            json.dumps(operation.get('tags', []), ensure_ascii=False),
-            operation.get('success', False),
-            operation.get('error_message', '')
+            operation.get("operation_type", ""),
+            operation.get("old_path", ""),
+            operation.get("new_path", ""),
+            operation.get("old_name", ""),
+            operation.get("new_name", ""),
+            json.dumps(operation.get("tags", []), ensure_ascii=False),
+            operation.get("success", False),
+            operation.get("error_message", ""),
         )
-        
+
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(query, params)
             conn.commit()
             return cursor.lastrowid
-    
-    def get_operation_logs(self, file_id: Optional[int] = None, limit: int = 100) -> List[sqlite3.Row]:
+
+    def get_operation_logs(
+        self, file_id: Optional[int] = None, limit: int = 100
+    ) -> List[sqlite3.Row]:
         """
         获取操作日志
-        
+
         Args:
             file_id: 文件ID（可选）
             limit: 返回记录数限制
-            
+
         Returns:
             List[sqlite3.Row]: 操作日志
         """
         if file_id:
-            query = '''
+            query = """
                 SELECT * FROM operation_logs 
                 WHERE file_id = ? 
                 ORDER BY created_at DESC 
                 LIMIT ?
-            '''
+            """
             return self.execute_query(query, (file_id, limit))
         else:
-            query = '''
+            query = """
                 SELECT * FROM operation_logs 
                 ORDER BY created_at DESC 
                 LIMIT ?
-            '''
+            """
             return self.execute_query(query, (limit,))
-    
+
     def insert_feedback(self, feedback: Dict[str, Any]) -> int:
         """
         插入用户反馈
-        
+
         Args:
             feedback: 反馈信息
-            
+
         Returns:
             int: 插入记录的ID
         """
         import json
-        
-        query = '''
+
+        query = """
             INSERT INTO user_feedback (file_id, original_category, corrected_category,
                                      original_tags, corrected_tags, feedback_type)
             VALUES (?, ?, ?, ?, ?, ?)
-        '''
+        """
         params = (
-            feedback.get('file_id'),
-            feedback.get('original_category', ''),
-            feedback.get('corrected_category', ''),
-            json.dumps(feedback.get('original_tags', []), ensure_ascii=False),
-            json.dumps(feedback.get('corrected_tags', []), ensure_ascii=False),
-            feedback.get('feedback_type', '')
+            feedback.get("file_id"),
+            feedback.get("original_category", ""),
+            feedback.get("corrected_category", ""),
+            json.dumps(feedback.get("original_tags", []), ensure_ascii=False),
+            json.dumps(feedback.get("corrected_tags", []), ensure_ascii=False),
+            feedback.get("feedback_type", ""),
         )
-        
+
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(query, params)
             conn.commit()
             return cursor.lastrowid
-    
+
     def get_statistics(self) -> Dict[str, Any]:
         """
         获取数据库统计信息
-        
+
         Returns:
             Dict[str, Any]: 统计信息
         """
         stats = {}
-        
+
         # 文件总数
-        result = self.execute_query('SELECT COUNT(*) as count FROM files')
-        stats['total_files'] = result[0]['count'] if result else 0
-        
+        result = self.execute_query("SELECT COUNT(*) as count FROM files")
+        stats["total_files"] = result[0]["count"] if result else 0
+
         # 各状态文件数
-        result = self.execute_query('''
+        result = self.execute_query(
+            """
             SELECT status, COUNT(*) as count 
             FROM files 
             GROUP BY status
-        ''')
-        stats['files_by_status'] = {row['status']: row['count'] for row in result}
-        
+        """
+        )
+        stats["files_by_status"] = {row["status"]: row["count"] for row in result}
+
         # 分类统计
-        result = self.execute_query('''
+        result = self.execute_query(
+            """
             SELECT category, COUNT(*) as count 
             FROM classifications 
             GROUP BY category 
             ORDER BY count DESC
-        ''')
-        stats['classifications'] = {row['category']: row['count'] for row in result}
-        
+        """
+        )
+        stats["classifications"] = {row["category"]: row["count"] for row in result}
+
         # 操作统计
-        result = self.execute_query('''
+        result = self.execute_query(
+            """
             SELECT operation_type, COUNT(*) as count, 
                    SUM(CASE WHEN success THEN 1 ELSE 0 END) as success_count
             FROM operation_logs 
             GROUP BY operation_type
-        ''')
-        stats['operations'] = {
-            row['operation_type']: {
-                'total': row['count'],
-                'success': row['success_count']
+        """
+        )
+        stats["operations"] = {
+            row["operation_type"]: {
+                "total": row["count"],
+                "success": row["success_count"],
             }
             for row in result
         }
-        
+
         return stats

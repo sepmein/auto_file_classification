@@ -9,7 +9,7 @@ from .rule_checker import RuleChecker
 
 __all__ = [
     "DocumentClassifier",
-    "RetrievalAgent", 
+    "RetrievalAgent",
     "LLMClassifier",
     "RuleChecker",
 ]

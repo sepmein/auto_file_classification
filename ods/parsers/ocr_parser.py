@@ -12,6 +12,7 @@ import logging
 try:
     import pytesseract
     from PIL import Image
+
     TESSERACT_AVAILABLE = True
 except ImportError:
     pytesseract = None
@@ -21,6 +22,7 @@ except ImportError:
 # PDF处理
 try:
     import fitz  # PyMuPDF
+
     PYMUPDF_AVAILABLE = True
 except ImportError:
     PYMUPDF_AVAILABLE = False
@@ -33,7 +35,15 @@ class OCRParser(BaseParser):
 
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
-        self.supported_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif', '.gif']
+        self.supported_extensions = [
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".bmp",
+            ".tiff",
+            ".tif",
+            ".gif",
+        ]
 
         # OCR配置
         ocr_config = config.get("ocr", {})
@@ -61,15 +71,17 @@ class OCRParser(BaseParser):
     def parse(self, file_path: Path) -> ParseResult:
         """
         解析图片文件
-        
+
         Args:
             file_path: 图片文件路径
-            
+
         Returns:
             ParseResult: 解析结果
         """
         if not TESSERACT_AVAILABLE:
-            return self.create_error_result(file_path, "OCR功能不可用：pytesseract或PIL未安装")
+            return self.create_error_result(
+                file_path, "OCR功能不可用：pytesseract或PIL未安装"
+            )
 
         if not self.can_parse(file_path):
             return self.create_error_result(file_path, f"无法解析文件: {file_path}")
@@ -87,8 +99,7 @@ class OCRParser(BaseParser):
 
             if not text or confidence < self.min_confidence:
                 return self.create_error_result(
-                    file_path, 
-                    f"OCR提取失败或置信度过低 (置信度: {confidence:.1f}%)"
+                    file_path, f"OCR提取失败或置信度过低 (置信度: {confidence:.1f}%)"
                 )
 
             # 清理文本
@@ -100,7 +111,7 @@ class OCRParser(BaseParser):
             content = ParsedContent(
                 text=text,
                 title=self.extract_title_from_text(text, file_path.name),
-                metadata={**self.get_file_metadata(file_path), **metadata}
+                metadata={**self.get_file_metadata(file_path), **metadata},
             )
 
             return self.create_success_result(file_path, content)
@@ -122,8 +133,8 @@ class OCRParser(BaseParser):
         """
         try:
             # 转换为RGB模式
-            if image.mode != 'RGB':
-                image = image.convert('RGB')
+            if image.mode != "RGB":
+                image = image.convert("RGB")
 
             # 调整图片大小（放大）
             if self.resize_factor != 1.0:
@@ -133,10 +144,11 @@ class OCRParser(BaseParser):
                 image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
             # 转换为灰度图
-            image = image.convert('L')
+            image = image.convert("L")
 
             # 简单的对比度增强
             import numpy as np
+
             img_array = np.array(image)
 
             # 计算图片的平均亮度
@@ -161,23 +173,25 @@ class OCRParser(BaseParser):
     def _perform_ocr(self, image) -> tuple:
         """
         执行OCR识别
-        
+
         Args:
             image: PIL图片对象
-            
+
         Returns:
             tuple: (识别的文本, 置信度)
         """
         # 配置Tesseract参数
-        custom_config = f'--oem {self.oem} --psm {self.psm} -l {self.language}'
+        custom_config = f"--oem {self.oem} --psm {self.psm} -l {self.language}"
 
         # 执行OCR
         text = pytesseract.image_to_string(image, config=custom_config)
 
         # 获取置信度信息
         try:
-            data = pytesseract.image_to_data(image, config=custom_config, output_type=pytesseract.Output.DICT)
-            confidences = [int(conf) for conf in data['conf'] if int(conf) > 0]
+            data = pytesseract.image_to_data(
+                image, config=custom_config, output_type=pytesseract.Output.DICT
+            )
+            confidences = [int(conf) for conf in data["conf"] if int(conf) > 0]
             avg_confidence = sum(confidences) / len(confidences) if confidences else 0
         except Exception as e:
             self.logger.warning(f"获取OCR置信度失败: {e}")
@@ -190,22 +204,22 @@ class OCRParser(BaseParser):
     ) -> Dict[str, Any]:
         """
         提取图片元数据
-        
+
         Args:
             file_path: 文件路径
             image: PIL图片对象
             confidence: OCR置信度
-            
+
         Returns:
             Dict[str, Any]: 图片元数据
         """
         metadata = {
-            'image_width': image.width,
-            'image_height': image.height,
-            'image_mode': image.mode,
-            'image_format': image.format,
-            'ocr_confidence': confidence,
-            'ocr_language': self.language,
+            "image_width": image.width,
+            "image_height": image.height,
+            "image_mode": image.mode,
+            "image_format": image.format,
+            "ocr_confidence": confidence,
+            "ocr_language": self.language,
         }
 
         # 提取EXIF信息
@@ -214,19 +228,19 @@ class OCRParser(BaseParser):
             if exif:
                 # 提取一些常用的EXIF标签
                 exif_tags = {
-                    'DateTime': 306,
-                    'DateTimeOriginal': 36867,
-                    'DateTimeDigitized': 36868,
-                    'Make': 271,
-                    'Model': 272,
-                    'Software': 305,
-                    'XResolution': 282,
-                    'YResolution': 283,
+                    "DateTime": 306,
+                    "DateTimeOriginal": 36867,
+                    "DateTimeDigitized": 36868,
+                    "Make": 271,
+                    "Model": 272,
+                    "Software": 305,
+                    "XResolution": 282,
+                    "YResolution": 283,
                 }
 
                 for tag_name, tag_id in exif_tags.items():
                     if tag_id in exif:
-                        metadata[f'exif_{tag_name.lower()}'] = str(exif[tag_id])
+                        metadata[f"exif_{tag_name.lower()}"] = str(exif[tag_id])
 
         except Exception:
             pass  # EXIF信息不是必需的
@@ -236,10 +250,10 @@ class OCRParser(BaseParser):
     def parse_pdf_with_ocr(self, file_path: Path) -> ParseResult:
         """
         对扫描PDF进行OCR解析
-        
+
         Args:
             file_path: PDF文件路径
-            
+
         Returns:
             ParseResult: 解析结果
         """
@@ -264,6 +278,7 @@ class OCRParser(BaseParser):
 
                 # 转换为PIL图片
                 from io import BytesIO
+
                 image = Image.open(BytesIO(img_data))
 
                 # 执行OCR
@@ -279,23 +294,23 @@ class OCRParser(BaseParser):
             if not text_parts:
                 return self.create_error_result(file_path, "PDF中未找到可识别的文本")
 
-            text = '\n\n'.join(text_parts)
+            text = "\n\n".join(text_parts)
             text = self.clean_text(text)
 
             avg_confidence = total_confidence / page_count if page_count > 0 else 0
 
             metadata = {
-                'pdf_pages': len(doc),
-                'ocr_pages': page_count,
-                'avg_ocr_confidence': avg_confidence,
-                'ocr_language': self.language,
+                "pdf_pages": len(doc),
+                "ocr_pages": page_count,
+                "avg_ocr_confidence": avg_confidence,
+                "ocr_language": self.language,
             }
 
             content = ParsedContent(
                 text=text,
                 title=self.extract_title_from_text(text, file_path.name),
                 page_count=len(doc),
-                metadata={**self.get_file_metadata(file_path), **metadata}
+                metadata={**self.get_file_metadata(file_path), **metadata},
             )
 
             return self.create_success_result(file_path, content)
@@ -308,10 +323,10 @@ class OCRParser(BaseParser):
     def can_parse(self, file_path: Path) -> bool:
         """
         检查是否可以进行OCR解析
-        
+
         Args:
             file_path: 文件路径
-            
+
         Returns:
             bool: 是否可以解析
         """
@@ -323,14 +338,14 @@ class OCRParser(BaseParser):
     def is_scanned_pdf(self, file_path: Path) -> bool:
         """
         检查PDF是否为扫描版（主要包含图片）
-        
+
         Args:
             file_path: PDF文件路径
-            
+
         Returns:
             bool: 是否为扫描PDF
         """
-        if not PYMUPDF_AVAILABLE or file_path.suffix.lower() != '.pdf':
+        if not PYMUPDF_AVAILABLE or file_path.suffix.lower() != ".pdf":
             return False
 
         try:

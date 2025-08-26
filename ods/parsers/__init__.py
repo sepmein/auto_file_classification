@@ -14,7 +14,7 @@ from .ocr_parser import OCRParser
 __all__ = [
     "DocumentParser",
     "BaseParser",
-    "PDFParser", 
+    "PDFParser",
     "OfficeParser",
     "TextParser",
     "OCRParser",

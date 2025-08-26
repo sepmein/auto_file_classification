@@ -158,9 +158,10 @@ class TestStage1EndToEnd:
         assert "rules_applied" in rules_result
 
     @patch("ods.embeddings.models.LocalEmbeddingModel")
-    @patch("ods.classifiers.llm_classifier.LLMClassifier")
+    @patch("ods.classifiers.classifier.LLMClassifier")
+    @patch("ods.classifiers.classifier.RuleChecker")
     def test_mock_embedding_and_classification(
-        self, mock_llm, mock_embedding, test_config, temp_workspace
+        self, mock_rule_checker, mock_llm, mock_embedding, test_config, temp_workspace
     ):
         """测试嵌入和分类功能（使用模拟）"""
         config_data, config_file = test_config
@@ -186,6 +187,16 @@ class TestStage1EndToEnd:
         }
         mock_llm.return_value = mock_llm_instance
 
+        # 设置模拟规则检查器
+        mock_rule_checker_instance = Mock()
+        mock_rule_checker_instance.apply_rules.return_value = {
+            "primary_category": "工作",
+            "confidence_score": 0.85,
+            "reasoning": "文档内容涉及工作项目",
+            "classification_timestamp": "2023-01-01T00:00:00",
+        }
+        mock_rule_checker.return_value = mock_rule_checker_instance
+
         # 测试嵌入生成器
         embedder = Embedder(config_data)
         document_data = {
@@ -207,10 +218,23 @@ class TestStage1EndToEnd:
         assert classification_result["confidence_score"] == 0.85
 
     @patch("ods.embeddings.models.LocalEmbeddingModel")
-    @patch("ods.classifiers.llm_classifier.LLMClassifier")
+    @patch("ods.classifiers.classifier.LLMClassifier")
+    @patch("ods.classifiers.classifier.RuleChecker")
     @patch("ods.storage.file_mover.FileMover.move_file")
+    @patch("ods.core.workflow.DocumentClassifier")
+    @patch("ods.core.workflow.Embedder")
+    @patch("ods.core.workflow.RuleEngine")
     def test_complete_workflow(
-        self, mock_move_file, mock_llm, mock_embedding, test_config, temp_workspace
+        self,
+        mock_rule_engine,
+        mock_embedder,
+        mock_classifier,
+        mock_move_file,
+        mock_rule_checker,
+        mock_llm,
+        mock_embedding,
+        test_config,
+        temp_workspace,
     ):
         """测试完整的工作流程"""
         config_data, config_file = test_config
@@ -235,6 +259,47 @@ class TestStage1EndToEnd:
             "classification_timestamp": "2023-01-01T00:00:00",
         }
         mock_llm.return_value = mock_llm_instance
+
+        # 设置模拟规则检查器
+        mock_rule_checker_instance = Mock()
+        mock_rule_checker_instance.apply_rules.return_value = {
+            "primary_category": "工作",
+            "confidence_score": 0.85,
+            "reasoning": "文档内容涉及工作项目",
+            "classification_timestamp": "2023-01-01T00:00:00",
+        }
+        mock_rule_checker.return_value = mock_rule_checker_instance
+
+        # 设置模拟嵌入器
+        mock_embedder_instance = Mock()
+        mock_embedder_instance.process_document.return_value = {
+            "status": "success",
+            "embedding": [0.1] * 1024,
+            "summary": "工作项目季度报告",
+            "keywords": ["工作", "项目", "报告"],
+            "embedding_metadata": {"dimension": 1024},
+        }
+        mock_embedder.return_value = mock_embedder_instance
+
+        # 设置模拟规则引擎
+        mock_rule_engine_instance = Mock()
+        mock_rule_engine_instance.apply_rules.return_value = {
+            "primary_category": "工作",
+            "confidence_score": 0.85,
+            "reasoning": "文档内容涉及工作项目",
+            "classification_timestamp": "2023-01-01T00:00:00",
+        }
+        mock_rule_engine.return_value = mock_rule_engine_instance
+
+        # 设置模拟分类器
+        mock_classifier_instance = Mock()
+        mock_classifier_instance.classify_document.return_value = {
+            "primary_category": "工作",
+            "confidence_score": 0.85,
+            "reasoning": "文档内容涉及工作项目",
+            "classification_timestamp": "2023-01-01T00:00:00",
+        }
+        mock_classifier.return_value = mock_classifier_instance
 
         # 设置模拟文件移动
         mock_move_file.return_value = {

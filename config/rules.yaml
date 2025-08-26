@@ -2,10 +2,10 @@
 
 # LLM配置
 llm:
-  provider: "openai"  # openai, claude, ollama
-  model: "gpt-4"
+  provider: "ollama"  # openai, claude, ollama
+  model: "qwen3:latest"  # For Ollama: llama3.2:1b, qwen2.5:3b, etc.
   api_key: null  # 请设置您的API密钥
-  base_url: null
+  base_url: "http://localhost:11434"  # Ollama default endpoint
   temperature: 0.1
   max_tokens: 1000
 
