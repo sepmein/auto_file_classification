@@ -11,9 +11,11 @@ except Exception:  # pragma: no cover
 
 from .config import Config
 from .database import Database
+from .watcher import DirectoryWatcher
 
 __all__ = [
     "DocumentClassificationWorkflow",
     "Config",
     "Database",
+    "DirectoryWatcher",
 ]
