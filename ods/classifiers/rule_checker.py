@@ -20,11 +20,16 @@ class RuleChecker:
         # 规则配置
         self.rules_config = config.get('rules', {})
         self.rules_file = self.rules_config.get('rules_file', 'config/rules.yaml')
-        self.enable_rules = self.rules_config.get('enable_rules', True)
+        # 如果未提供规则配置，则默认禁用规则以避免意外影响
+        self.enable_rules = self.rules_config.get('enable_rules', bool(self.rules_config))
         self.strict_mode = self.rules_config.get('strict_mode', False)
         
         # 加载规则
         self.rules = self._load_rules()
+        # 简单规则（阶段2）
+        extra_simple = self.rules_config.get('simple_rules', [])
+        if extra_simple:
+            self.simple_rules.extend(extra_simple)
         
         # 规则类型
         self.rule_types = {
@@ -41,27 +46,34 @@ class RuleChecker:
         try:
             if not self.enable_rules:
                 self.logger.info("规则检查已禁用")
+                self.simple_rules = []
                 return {}
-            
+
             rules_path = Path(self.rules_file)
             if not rules_path.exists():
                 self.logger.warning(f"规则文件不存在: {rules_path}")
                 return self._get_default_rules()
-            
+
             with open(rules_path, 'r', encoding='utf-8') as f:
-                rules = yaml.safe_load(f)
-            
+                data = yaml.safe_load(f) or {}
+
+            # 提取简单规则
+            self.simple_rules = data.get('simple_rules', [])
+            for key in ['simple_rules']:
+                data.pop(key, None)
+
             # 验证规则格式
-            validated_rules = self._validate_rules(rules)
-            self.logger.info(f"成功加载 {len(validated_rules)} 条规则")
+            validated_rules = self._validate_rules(data)
+            self.logger.info(f"成功加载 {len(validated_rules)} 条规则，{len(self.simple_rules)} 条简单规则")
             return validated_rules
-            
+
         except Exception as e:
             self.logger.error(f"加载规则失败: {e}")
             return self._get_default_rules()
     
     def _get_default_rules(self) -> Dict[str, Any]:
         """获取默认规则"""
+        self.simple_rules = []
         return {
             'file_extension': {
                 '.pdf': {'category': '文档', 'priority': 1},
@@ -104,60 +116,54 @@ class RuleChecker:
         
         return validated_rules
     
-    def apply_rules(self, classification_result: Dict[str, Any], 
+    def apply_rules(self, classification_result: Dict[str, Any],
                    document_data: Dict[str, Any]) -> Dict[str, Any]:
         """应用规则调整分类结果"""
         try:
-            if not self.enable_rules or not self.rules:
-                return classification_result
-            
-            self.logger.info("开始应用规则检查")
-            
-            # 收集所有规则匹配结果
-            rule_matches = []
-            
-            for rule_type, rule_checker in self.rule_types.items():
-                if rule_type in self.rules:
-                    matches = rule_checker(document_data, self.rules[rule_type])
-                    rule_matches.extend(matches)
-            
-            # 如果没有规则匹配，返回原结果
-            if not rule_matches:
-                self.logger.info("没有规则匹配，保持原分类结果")
-                return classification_result
-            
-            # 按优先级排序规则匹配
-            rule_matches.sort(key=lambda x: x['priority'], reverse=True)
-            
-            # 应用最高优先级的规则
-            top_rule = rule_matches[0]
-            self.logger.info(f"应用规则: {top_rule['rule_type']} -> {top_rule['category']}")
-            
-            # 调整分类结果
-            adjusted_result = classification_result.copy()
-            adjusted_result['primary_category'] = top_rule['category']
-            adjusted_result['rule_applied'] = {
-                'rule_type': top_rule['rule_type'],
-                'rule_value': top_rule['rule_value'],
-                'priority': top_rule['priority'],
-                'confidence_boost': 0.2  # 规则匹配提高置信度
-            }
-            
-            # 提高置信度
-            original_confidence = adjusted_result.get('confidence_score', 0.0)
-            adjusted_result['confidence_score'] = min(1.0, original_confidence + 0.2)
-            
-            # 更新推理
-            original_reasoning = adjusted_result.get('reasoning', '')
-            adjusted_result['reasoning'] = f"{original_reasoning} (应用规则: {top_rule['rule_type']}={top_rule['rule_value']})"
-            
-            # 如果置信度足够高，不需要复核
-            if adjusted_result['confidence_score'] >= 0.8:
-                adjusted_result['needs_review'] = False
-            
-            self.logger.info(f"规则应用完成，新类别: {adjusted_result['primary_category']}")
-            return adjusted_result
-            
+            result = classification_result.copy()
+
+            if self.enable_rules and self.rules:
+                self.logger.info("开始应用规则检查")
+
+                # 收集所有规则匹配结果
+                rule_matches = []
+
+                for rule_type, rule_checker in self.rule_types.items():
+                    if rule_type in self.rules:
+                        matches = rule_checker(document_data, self.rules[rule_type])
+                        rule_matches.extend(matches)
+
+                if rule_matches:
+                    # 按优先级排序规则匹配
+                    rule_matches.sort(key=lambda x: x['priority'], reverse=True)
+
+                    # 应用最高优先级的规则
+                    top_rule = rule_matches[0]
+                    self.logger.info(f"应用规则: {top_rule['rule_type']} -> {top_rule['category']}")
+
+                    result['primary_category'] = top_rule['category']
+                    result['rule_applied'] = {
+                        'rule_type': top_rule['rule_type'],
+                        'rule_value': top_rule['rule_value'],
+                        'priority': top_rule['priority'],
+                        'confidence_boost': 0.2
+                    }
+
+                    # 提高置信度
+                    original_confidence = result.get('confidence_score', 0.0)
+                    result['confidence_score'] = min(1.0, original_confidence + 0.2)
+
+                    # 更新推理
+                    original_reasoning = result.get('reasoning', '')
+                    result['reasoning'] = f"{original_reasoning} (应用规则: {top_rule['rule_type']}={top_rule['rule_value']})"
+
+                    if result['confidence_score'] >= 0.8:
+                        result['needs_review'] = False
+
+            # 无论是否应用复杂规则，都执行简单规则以生成标签等
+            result = self._apply_simple_rules(result, document_data)
+            return result
+
         except Exception as e:
             self.logger.error(f"应用规则失败: {e}")
             return classification_result
@@ -258,7 +264,7 @@ class RuleChecker:
         
         return matches
     
-    def _check_custom_rules(self, document_data: Dict[str, Any], 
+    def _check_custom_rules(self, document_data: Dict[str, Any],
                            rules: Dict[str, Any]) -> List[Dict[str, Any]]:
         """检查自定义规则"""
         matches = []
@@ -276,8 +282,51 @@ class RuleChecker:
                     })
             except Exception as e:
                 self.logger.warning(f"自定义规则 {rule_name} 执行失败: {e}")
-        
+
         return matches
+
+    def _apply_simple_rules(self, result: Dict[str, Any],
+                            document_data: Dict[str, Any]) -> Dict[str, Any]:
+        """应用简单规则并生成标签"""
+        try:
+            # 构建初始标签集合
+            tags = result.get('tags')
+            if tags is None:
+                tags = []
+                primary = result.get('primary_category')
+                if primary:
+                    tags.append(primary)
+                tags.extend(result.get('secondary_categories', []))
+                tags.extend(result.get('suggested_tags', []))
+
+            file_name = Path(document_data.get('file_path', '')).name
+            content = document_data.get('text_content') or document_data.get('summary', '')
+
+            for rule in self.simple_rules:
+                try:
+                    if 'if_filename' in rule and 'add_tag' in rule:
+                        if rule['if_filename'] in file_name:
+                            tags.append(rule['add_tag'])
+
+                    if 'if_content_regex' in rule and 'add_tag' in rule:
+                        if re.search(rule['if_content_regex'], content, re.IGNORECASE):
+                            tags.append(rule['add_tag'])
+
+                    if 'if_tag_combo' in rule and rule.get('action') == 'require_review':
+                        combo = rule['if_tag_combo']
+                        if all(t in tags for t in combo):
+                            result['needs_review'] = True
+                except Exception as e:
+                    self.logger.warning(f"简单规则执行失败: {e}")
+
+            # 去重并保存
+            result['tags'] = list(dict.fromkeys(tags))
+            return result
+
+        except Exception as e:
+            self.logger.warning(f"应用简单规则失败: {e}")
+            result['tags'] = result.get('tags') or []
+            return result
     
     def _evaluate_size_rule(self, file_size: int, size_rule: str) -> bool:
         """评估文件大小规则"""

@@ -25,40 +25,50 @@ class TextParser(BaseParser):
         self.encoding_detection = config.get("text", {}).get("encoding_detection", True)
         self.default_encoding = config.get("text", {}).get("default_encoding", "utf-8")
     
-    def parse(self, file_path: Path) -> ParseResult:
-        """
-        解析文本文件
-        
+    def parse(self, file_path: Path | str) -> ParseResult:
+        """解析文本文件.
+
+        测试用例会以 ``str`` 形式传入路径，因此在这里允许
+        ``str``/``Path`` 两种类型并在内部统一转换。这使得解析器
+        更易于使用并避免由于类型不匹配导致的 ``AttributeError``。
+
         Args:
             file_path: 文本文件路径
-            
+
         Returns:
             ParseResult: 解析结果
         """
+        if isinstance(file_path, str):
+            file_path = Path(file_path)
+
         if not self.can_parse(file_path):
             return self.create_error_result(file_path, f"无法解析文件: {file_path}")
-        
+
         try:
             # 检测编码并读取文件
-            text = self._read_text_file(file_path)
+            raw_text = self._read_text_file(file_path)
             
-            if not text:
+            if not raw_text:
                 return self.create_error_result(file_path, "文本文件为空")
-            
+
+            # 提取标题需要原始文本中的换行符，因此在清理前进行
+            title = self._extract_title_by_type(file_path, raw_text)
+
             # 检查文本长度
+            text = raw_text
             if len(text) > self.max_text_length:
                 text = text[:self.max_text_length] + "\n... (文本被截断)"
                 self.logger.warning(f"文本过长已截断: {file_path}")
-            
+
             # 清理文本
             text = self.clean_text(text)
-            
+
             # 根据文件类型提取特定信息
             metadata = self._extract_text_metadata(file_path, text)
-            
+
             content = ParsedContent(
                 text=text,
-                title=self._extract_title_by_type(file_path, text),
+                title=title,
                 metadata={**self.get_file_metadata(file_path), **metadata}
             )
             
