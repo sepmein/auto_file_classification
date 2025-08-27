@@ -48,7 +48,7 @@ For file classification, we recommend lightweight models:
 ollama pull llama3.2:1b
 
 # Small but capable model  
-ollama pull qwen2.5:3b
+ollama pull qwen3
 
 # Larger model for better accuracy
 ollama pull llama3.2:3b
@@ -95,7 +95,7 @@ python -m ods apply test_documents --dry-run
 | Model | Size | Speed | Accuracy | Use Case |
 |-------|------|-------|----------|----------|
 | `llama3.2:1b` | ~1GB | Very Fast | Good | Testing, lightweight classification |
-| `qwen2.5:3b` | ~2GB | Fast | Better | Balanced performance |
+| `qwen3` | ~2GB | Fast | Better | Balanced performance |
 | `llama3.2:3b` | ~2GB | Fast | Better | Good general purpose |
 | `qwen2.5:7b` | ~4GB | Medium | Best | High accuracy needs |
 

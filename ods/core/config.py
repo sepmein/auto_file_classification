@@ -109,6 +109,7 @@ class Config:
     def _find_config_file(self) -> str:
         """查找配置文件"""
         possible_paths = [
+            "config/rules.yaml",
             "rules.yaml",
             "config.yaml",
             ".ods/config.yaml",
@@ -119,7 +120,7 @@ class Config:
             if os.path.exists(path):
                 return path
 
-        return "rules.yaml"
+        return "config/rules.yaml"
 
     def load_config(self) -> None:
         """加载配置文件"""

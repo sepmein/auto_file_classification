@@ -81,7 +81,7 @@ ollama serve
 
 # 3. 下载模型
 ollama pull llama3.2:1b  # 轻量级模型
-ollama pull qwen2.5:3b   # 平衡性能
+ollama pull qwen3   # 平衡性能
 
 # 4. 测试连接
 python test_ollama.py

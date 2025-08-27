@@ -64,13 +64,27 @@ class Embedder:
                 embedding = self.model.encode(text_for_embedding)
             if not isinstance(embedding, (list, tuple, np.ndarray)) and hasattr(self.model, "encode_single"):
                 embedding = self.model.encode_single(text_for_embedding)
+
+            # 验证嵌入向量
+            if embedding is None:
+                raise ValueError("嵌入模型未返回有效的嵌入向量")
+
+            # 计算嵌入维度
+            try:
+                if isinstance(embedding, (list, tuple, np.ndarray)):
+                    embedding_dimension = len(embedding)
+                else:
+                    embedding_dimension = 1  # 标量值
+            except (TypeError, AttributeError):
+                embedding_dimension = 0
+
             summary = self.text_processor.generate_summary(text)
             keywords = self.text_processor.extract_keywords(text)
 
             return {
                 "file_path": document.get("file_path"),
                 "embedding": embedding,
-                "embedding_dimension": len(embedding),
+                "embedding_dimension": embedding_dimension,
                 "summary": summary,
                 "keywords": keywords,
                 "status": "success",

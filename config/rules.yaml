@@ -3,11 +3,23 @@
 # LLM配置
 llm:
   provider: "ollama"  # openai, claude, ollama
-  model: "qwen3:latest"  # For Ollama: llama3.2:1b, qwen2.5:3b, etc.
-  api_key: null  # 请设置您的API密钥
+  model: "qwen3"  # For Ollama: llama3.2:1b, qwen3, etc.
+  api_key: "ollama"  # Ollama不需要真实API密钥，但这里设置一个占位符
   base_url: "http://localhost:11434"  # Ollama default endpoint
   temperature: 0.1
   max_tokens: 1000
+
+# Ollama配置 - 用于文档阅读和分类
+ollama:
+  base_url: "http://localhost:11434"
+  model: "qwen3"  # 文档阅读和分类模型
+  reader_model: "qwen3"  # 专用阅读模型（可选）
+  classifier_model: "qwen3"  # 专用分类模型（可选）
+  timeout: 300
+  max_retries: 3
+  enable_reader: true  # 是否启用Ollama文档阅读
+  enable_insights: true  # 是否提取文档洞察
+  context_window: 4096  # 模型上下文窗口大小
 
 # 嵌入模型配置
 embedding:
@@ -58,21 +70,54 @@ llama_index:
   chunk_overlap: 200
   similarity_top_k: 5
 
-# 分类配置
+# 分类配置 - 支持多标签分类
 classification:
-  categories:
-    - "工作"
-    - "个人" 
-    - "财务"
-    - "其他"
-  confidence_threshold: 0.8
-  review_threshold: 0.6
-  max_tags: 3
+  # 置信度阈值配置
+  confidence_threshold:
+    auto: 0.85      # 自动分类阈值
+    review: 0.6     # 需要审核的阈值
+    min: 0.3        # 最低置信度
+  
+  # 标签体系定义 - 支持多维度分类
+  taxonomies:
+    主类别:          # 主要分类维度
+      - "工作"
+      - "个人" 
+      - "财务"
+      - "其他"
+    文档类型:        # 文档性质维度
+      - "报告"
+      - "合同"
+      - "发票"
+      - "照片"
+      - "计划"
+      - "会议记录"
+    敏感级别:        # 安全级别维度
+      - "公开"
+      - "内部"
+      - "机密"
+  
+  # 标签规则配置
+  tag_rules:
+    max_tags_per_file: 5        # 每个文件最多标签数
+    primary_tag_required: true  # 是否必须指定主标签
+    allow_cross_categories: true # 是否允许跨类别标签
+    
+    # 互斥标签组（不能同时出现）
+    mutually_exclusive:
+      - ["个人", "工作"]
+      - ["公开", "机密"]
+    
+    # 标签优先级（用于确定主标签）
+    priority_order:
+      - "主类别"
+      - "文档类型" 
+      - "敏感级别"
 
 # 文件处理配置
 file:
-  source_directory: ""  # 请设置您的源目录
-  target_directory: "分类"
+  source_directory: "D:\\OneDrive"  # 请设置您的源目录
+  target_directory: "D:\\OneDrive"
   supported_extensions:
     - ".pdf"
     - ".docx"
@@ -84,7 +129,48 @@ file:
     - ".jpg"
     - ".jpeg"
     - ".png"
-  max_file_size: 104857600  # 100MB
+  max_file_size: 524288000  # 500MB
+
+# 规则引擎配置 - 支持自动标签和分类
+rules:
+  # 预分类规则（在LLM分类前执行）
+  pre_classification:
+    - name: "发票文件自动标签"
+      condition: "filename_contains"
+      value: "发票"
+      action: "add_tag"
+      target: "发票"
+      priority: "high"
+      
+    - name: "合同文件自动标签"
+      condition: "filename_contains" 
+      value: "合同"
+      action: "add_tag"
+      target: "合同"
+      priority: "high"
+      
+    - name: "排除临时文件"
+      condition: "file_extension"
+      value: ["tmp", "log", "bak"]
+      action: "exclude"
+      priority: "high"
+  
+  # 后分类规则（在LLM分类后执行）
+  post_classification:
+    - name: "机密文件特殊处理"
+      condition: "tags_contain"
+      value: "机密"
+      action: "require_review"
+      priority: "high"
+      
+    - name: "财务文件路径调整"
+      condition: "tags_contain"
+      value: "财务"
+      action: "set_path_template"
+      template: "财务/{{year}}/{{month}}/{{filename}}"
+      priority: "medium"
+
+
 
 # 文本处理配置
 text_processing:
@@ -131,13 +217,42 @@ ocr:
   psm: 3  # Page Segmentation Mode
   oem: 3  # OCR Engine Mode
   dpi: 300
-  min_confidence: 60
+  min_confidence: 30
   preprocess: true
   resize_factor: 2.0
 
+# 文件监控配置
+watcher:
+  enabled: true  # 是否启用文件监控功能
+  check_interval: 5  # 文件变化检测间隔（秒）
+  debounce_time: 2  # 文件稳定等待时间（秒），避免处理正在写入的文件
+  max_queue_size: 100  # 待处理文件队列最大长度
+  processed_cache_size: 1000  # 已处理文件缓存大小，用于避免重复处理
+  recursive: true  # 是否递归监控子目录
+
+  # 文件过滤配置
+  file_filters:
+    extensions: []  # 要监控的文件扩展名，为空则监控所有支持的格式
+    exclude_patterns: []  # 排除的文件名模式（支持正则表达式）
+    min_size: 0  # 最小文件大小（字节）
+    max_size: 104857600  # 最大文件大小（字节），默认100MB
+
+  # 监控策略配置
+  strategy:
+    immediate_process: false  # 是否立即处理文件变化
+    batch_process: true  # 是否批量处理多个文件
+    batch_size: 5  # 批量处理大小
+    process_existing: false  # 启动时是否处理已存在的文件
+
+  # 监控目录配置
+  directories:
+    - path: ""  # 监控目录路径，为空则使用file.source_directory
+      recursive: true
+      filters: []
+
 # 路径规划配置
 path_planning:
-  base_path: "OneDrive/分类"
+  base_path: "D:\\OneDrive"
   default_categories: ["工作", "个人", "财务", "其他"]
   multi_label_strategy: "primary_with_links"
   path_template: "{category}/{year}/{month}"
@@ -150,9 +265,9 @@ path_planning:
     important: "重要文件"
     archive: "归档"
 
-# 命名生成配置
+# 命名生成配置（扩展）
 naming:
-  default_template: "{{category}}-{{title}}-{{date}}.{{ext}}"
+  # 基础配置
   max_filename_length: 200
   enable_llm_title: true
   title_max_length: 50
@@ -160,6 +275,29 @@ naming:
   invalid_chars: "[<>:\"/\\\\|?*]"
   replacement_char: "_"
   templates_file: "config/naming_templates.yaml"
+  
+  # 多标签命名模板
+  default_template: "{{主类别}}/{{文档类型}}/{{title|default(original_name)}}.{{ext}}"
+  
+  # 分类别命名模板
+  category_templates:
+    财务:
+      template: "{{主类别}}/财务/{{year}}/{{month}}/{{title|default(original_name)}}.{{ext}}"
+    工作:
+      template: "{{主类别}}/工作/{{文档类型}}/{{title|default(original_name)}}.{{ext}}"
+    个人:
+      template: "{{主类别}}/个人/{{year}}/{{title|default(original_name)}}.{{ext}}"
+  
+  # 特殊标签命名规则
+  special_rules:
+    - condition: "tags_contain"
+      value: "机密"
+      suffix: "[机密]"
+    - condition: "tags_contain"
+      value: "发票"
+      prefix: "发票-"
+    - condition: "file_size > 10485760"  # 10MB
+      suffix: "[大文件]"
 
 # 系统配置
 system:

@@ -196,15 +196,14 @@ class IndexUpdater:
             # 创建或加载索引
             index_file = index_dir / "index.json"
             if index_file.exists():
-                self.llama_index = VectorStoreIndex.from_vector_store(
+                self.llama_index = VectorStoreIndex.from_vector_store(  # type: ignore[attr-defined]
                     self.vector_store, embed_model=self.embedding_model
                 )
             else:
-                self.llama_index = VectorStoreIndex.from_vector_store(
+                self.llama_index = VectorStoreIndex.from_vector_store(  # type: ignore[attr-defined]
                     self.vector_store, embed_model=self.embedding_model
                 )
-                # 保存索引
-                self.llama_index.storage_context.persist(persist_dir=str(index_dir))
+                # 注意: ChromaDB自动处理持久化，不需要手动保存
 
         except Exception as e:
             self.logger.error(f"LlamaIndex初始化失败: {e}")
@@ -302,12 +301,14 @@ class IndexUpdater:
             if not text_content:
                 text_content = document_data.get("summary", "")
 
-            # 添加到向量库
-            client = chromadb.PersistentClient(path=self.chroma_path)
-            try:
-                collection = client.get_collection(self.collection_name)
-            except Exception:
-                collection = client.create_collection(self.collection_name)
+            # 添加到向量库（优先复用已初始化的 collection）
+            collection = getattr(self, "collection", None)
+            if collection is None:
+                client = chromadb.PersistentClient(path=self.chroma_path)
+                try:
+                    collection = client.get_collection(self.collection_name)
+                except Exception:
+                    collection = client.create_collection(self.collection_name)
             collection.add(
                 embeddings=[embedding],
                 documents=[text_content],
@@ -316,7 +317,7 @@ class IndexUpdater:
             )
 
             return {'success': True}
-            
+
         except Exception as e:
             self.logger.error(f"向量库更新失败: {e}")
             return {"success": False, "error": str(e)}
@@ -360,9 +361,7 @@ class IndexUpdater:
             # 插入文档到索引
             self.llama_index.insert(doc)
 
-            # 保存索引
-            index_dir = Path(self.index_path)
-            self.llama_index.storage_context.persist(persist_dir=str(index_dir))
+            # 注意: ChromaDB自动处理持久化，不需要手动保存
 
             return {"success": True}
 
@@ -447,7 +446,7 @@ class IndexUpdater:
                 else:
                     file_hash = ""
                     last_modified = datetime.now().isoformat()
-                
+
                 cursor.execute(f"""
                     INSERT OR REPLACE INTO {self.status_table} (
                         file_path, file_hash, last_modified, last_classified,
@@ -464,7 +463,7 @@ class IndexUpdater:
                     classification_result.get('confidence_score', 0.0) < self.config.get('classification', {}).get('review_threshold', 0.6),
                     datetime.now().isoformat()
                 ))
-                
+
                 conn.commit()
 
             return {"success": True}

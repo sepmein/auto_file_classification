@@ -115,9 +115,11 @@ class DocumentParser:
 
         # 检查文件类型是否支持
         if extension not in self.supported_extensions:
+            # 提供更详细的错误信息
+            detailed_error = self._get_detailed_unsupported_error(extension)
             return ParseResult(
                 success=False,
-                error=f"不支持的文件类型: {extension}",
+                error=detailed_error,
                 file_path=str(file_path),
             )
 
@@ -365,3 +367,94 @@ class DocumentParser:
         )
 
         return results
+
+    def _get_detailed_unsupported_error(self, extension: str) -> str:
+        """
+        获取不支持文件格式的详细错误信息
+
+        Args:
+            extension: 文件扩展名
+
+        Returns:
+            str: 详细错误信息
+        """
+        # Office 相关格式的详细错误信息
+        office_formats = {
+            ".doc": "Microsoft Word 97-2003 格式\n需要安装 textract 库: pip install textract\ntextract 支持多种旧版 Office 格式",
+            ".ppt": "Microsoft PowerPoint 97-2003 格式\n需要安装 textract 库: pip install textract\n需要 antiword 和 pptx 依赖",
+            ".xls": "Microsoft Excel 97-2003 格式\n需要安装 textract 库: pip install textract\n需要 xlrd 依赖",
+            ".docm": "Microsoft Word 宏文件格式\n需要安装 python-docx 库: pip install python-docx\n注意: 宏文件可能需要额外安全考虑",
+            ".pptm": "Microsoft PowerPoint 宏文件格式\n需要安装 python-pptx 库: pip install python-pptx\n注意: 宏文件可能需要额外安全考虑",
+            ".xlsm": "Microsoft Excel 宏文件格式\n需要安装 openpyxl 库: pip install openpyxl\n注意: 宏文件可能需要额外安全考虑",
+            ".rtf": "Rich Text Format\n需要安装额外解析器，如 pyrtf 或 striprtf",
+        }
+
+        # 其他常见格式的错误信息
+        other_formats = {
+            ".pdf": "PDF 格式\n系统已支持 PDF 解析，但可能需要安装额外依赖",
+            ".jpg": "JPEG 图像格式\n使用 OCR 解析，需要 tesseract-ocr",
+            ".png": "PNG 图像格式\n使用 OCR 解析，需要 tesseract-ocr",
+            ".gif": "GIF 图像格式\n使用 OCR 解析，需要 tesseract-ocr",
+            ".bmp": "BMP 图像格式\n使用 OCR 解析，需要 tesseract-ocr",
+            ".tiff": "TIFF 图像格式\n使用 OCR 解析，需要 tesseract-ocr",
+            ".zip": "ZIP 压缩文件\n不支持直接解析压缩文件，请先解压",
+            ".rar": "RAR 压缩文件\n不支持直接解析压缩文件，请先解压",
+            ".exe": "可执行文件\n不支持解析可执行文件",
+            ".dll": "动态链接库\n不支持解析二进制文件",
+        }
+
+        if extension in office_formats:
+            return f"不支持的文件格式: {office_formats[extension]}"
+        elif extension in other_formats:
+            return f"不支持的文件格式: {other_formats[extension]}"
+        else:
+            supported_extensions_str = ", ".join(sorted(self.supported_extensions))
+            return (
+                f"不支持的文件格式: {extension}\n"
+                f"当前支持的格式包括: {supported_extensions_str}\n"
+                f"对于 Office 旧版格式(.doc, .ppt, .xls)，请安装 textract 库\n"
+                f"对于图像格式，请确保安装了 tesseract-ocr"
+            )
+
+    def get_supported_formats_summary(self) -> str:
+        """
+        获取支持格式的摘要信息
+
+        Returns:
+            str: 格式支持摘要
+        """
+        summary = "📄 支持的文件格式:\n\n"
+
+        # 按类别分组
+        text_formats = [
+            ext
+            for ext in self.supported_extensions
+            if ext in [".txt", ".md", ".csv", ".json", ".xml", ".yaml", ".yml"]
+        ]
+        office_formats = [
+            ext
+            for ext in self.supported_extensions
+            if ext in [".docx", ".pptx", ".xlsx", ".doc", ".ppt", ".xls"]
+        ]
+        image_formats = [
+            ext
+            for ext in self.supported_extensions
+            if ext in [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif"]
+        ]
+        other_formats = [
+            ext
+            for ext in self.supported_extensions
+            if ext not in text_formats + office_formats + image_formats
+        ]
+
+        if text_formats:
+            summary += f"📝 文本格式: {', '.join(text_formats)}\n"
+        if office_formats:
+            summary += f"🏢 Office格式: {', '.join(office_formats)}\n"
+        if image_formats:
+            summary += f"🖼️ 图像格式: {', '.join(image_formats)}\n"
+        if other_formats:
+            summary += f"📋 其他格式: {', '.join(other_formats)}\n"
+
+        summary += "\n💡 提示: 对于不支持的格式，请查看错误信息获取安装指导"
+        return summary

@@ -98,9 +98,16 @@ class OCRParser(BaseParser):
             text, confidence = self._perform_ocr(image)
 
             if not text or confidence < self.min_confidence:
-                return self.create_error_result(
-                    file_path, f"OCR提取失败或置信度过低 (置信度: {confidence:.1f}%)"
-                )
+                if confidence == 0.0:
+                    return self.create_error_result(
+                        file_path,
+                        f"OCR未检测到任何文本内容 (可能是纯图片或扫描质量太差)",
+                    )
+                else:
+                    return self.create_error_result(
+                        file_path,
+                        f"OCR置信度过低 (置信度: {confidence:.1f}%, 最低要求: {self.min_confidence}%)",
+                    )
 
             # 清理文本
             text = self.clean_text(text)

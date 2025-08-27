@@ -442,7 +442,7 @@ class DocumentClassificationWorkflow:
             initial_state["rules_success"] = True
 
             mover = FileMover(self.config)
-            move_result = mover.move_file(str(file_path), path_plan["primary_path"])
+            move_result = mover.move_file(path_plan, naming)
             initial_state["move_success"] = move_result.get("moved", False)
 
             indexer = IndexUpdater(self.config)

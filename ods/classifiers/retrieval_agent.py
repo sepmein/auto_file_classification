@@ -22,18 +22,35 @@ class RetrievalAgent:
         self.config = config
         self.logger = logging.getLogger(__name__)
 
-        # 向量数据库配置
-        self.vector_db_path = config.get("database", {}).get(
-            "vector_db_path", ".ods/vector_db"
+        # 向量数据库配置（支持两套键名，优先使用 vector_store.*）
+        vector_store_cfg = config.get("vector_store", {})
+        database_cfg = config.get("database", {})
+        self.vector_db_path = (
+            vector_store_cfg.get("chroma_path")
+            or database_cfg.get("vector_db_path")
+            or ".ods/vector_db"
         )
-        self.collection_name = config.get("collection_name", "documents")
-        self.top_k = config.get("top_k", 5)
-        self.similarity_threshold = config.get("similarity_threshold", 0.7)
+        self.collection_name = (
+            vector_store_cfg.get("collection_name")
+            or config.get("collection_name")
+            or "documents"
+        )
+        self.top_k = vector_store_cfg.get("max_results") or config.get("top_k") or 5
+        self.similarity_threshold = (
+            vector_store_cfg.get("similarity_threshold")
+            or config.get("similarity_threshold")
+            or 0.7
+        )
 
         # 初始化ChromaDB
         self.client = None
         self.collection = None
         self._setup_vector_db()
+
+        # 减少初始化日志冗余
+        if not hasattr(RetrievalAgent, "_init_logged"):
+            self.logger.info(f"检索代理初始化完成 - 集合: {self.collection_name}")
+            RetrievalAgent._init_logged = True
 
         # 嵌入模型（用于查询向量化）
         self.embedder = Embedder(config)
@@ -81,7 +98,7 @@ class RetrievalAgent:
                 "text_chunk": text_chunk[:1000],  # 限制长度
                 **self._sanitize_metadata(metadata),
             }
-            
+
             emb = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
             self.collection.add(
                 embeddings=[emb],

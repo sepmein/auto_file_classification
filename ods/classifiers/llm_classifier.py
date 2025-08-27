@@ -53,6 +53,14 @@ class LLMClassifier:
         # 提示模板
         self.prompt_templates = self._load_prompt_templates()
 
+        # 减少初始化日志冗余
+        if not hasattr(LLMClassifier, "_init_logged"):
+            provider_name = (
+                "Ollama" if self.provider == "ollama" else self.provider.title()
+            )
+            self.logger.info(f"LLM分类器初始化完成 - 提供商: {provider_name}")
+            LLMClassifier._init_logged = True
+
     def _setup_llm_client(self):
         """设置LLM客户端"""
         try:
@@ -155,6 +163,15 @@ class LLMClassifier:
             document_summary = document_data.get("summary", "")
             document_embedding = document_data.get("embedding")
             file_path = document_data.get("file_path", "")
+            text_content = document_data.get("text_content", "")
+
+            # 如果没有摘要，尝试生成一个简单的摘要
+            if not document_summary and text_content:
+                # 使用文本的前200个字符作为简单摘要
+                document_summary = text_content[:200].replace("\n", " ").strip()
+                if len(text_content) > 200:
+                    document_summary += "..."
+                self.logger.info(f"为文档生成简单摘要: {len(document_summary)} 字符")
 
             if not document_summary:
                 self.logger.warning("文档摘要为空，无法进行分类")
@@ -242,13 +259,27 @@ class LLMClassifier:
                 return response.content[0].text
 
             elif self.provider == "ollama":
-                response = self.llm_client.chat.completions.create(
-                    model=self.model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=self.temperature,
-                    max_tokens=self.max_tokens,
-                )
-                return response.choices[0].message.content
+                # Ollama使用不同的API格式
+                try:
+                    # 首先尝试OpenAI兼容格式
+                    response = self.llm_client.chat.completions.create(
+                        model=self.model,
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=self.temperature,
+                        max_tokens=self.max_tokens,
+                    )
+                    return response.choices[0].message.content
+                except AttributeError:
+                    # 如果不支持chat.completions，尝试直接调用
+                    response = self.llm_client.generate(
+                        model=self.model,
+                        prompt=prompt,
+                        options={
+                            "temperature": self.temperature,
+                            "num_predict": self.max_tokens,
+                        },
+                    )
+                    return response.response
 
             else:
                 raise ValueError(f"不支持的提供商: {self.provider}")
