@@ -23,7 +23,7 @@ class OllamaReader:
         self.ollama_config = config.get("ollama", {})
         self.base_url = self.ollama_config.get("base_url", "http://localhost:11434")
         self.model = self.ollama_config.get("model", "qwen3")
-        self.timeout = self.ollama_config.get("timeout", 120)
+        self.timeout = self.ollama_config.get("timeout", 300)
         self.max_retries = self.ollama_config.get("max_retries", 3)
         self.max_content_length = self.ollama_config.get(
             "max_content_length", 8000

@@ -25,9 +25,9 @@ class OllamaClassifier:
         self.ollama_config = config.get("ollama", {})
         self.base_url = self.ollama_config.get("base_url", "http://localhost:11434")
         self.model = self.ollama_config.get(
-            "classifier_model", self.ollama_config.get("model", "qwen2.5:7b")
+            "classifier_model", self.ollama_config.get("model", "qwen3")
         )
-        self.timeout = self.ollama_config.get("timeout", 120)
+        self.timeout = self.ollama_config.get("timeout", 300)
         self.max_retries = self.ollama_config.get("max_retries", 3)
         self.context_window = self.ollama_config.get("context_window", 4096)
 

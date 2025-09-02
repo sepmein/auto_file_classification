@@ -778,6 +778,84 @@ class EnhancedWorkflow:
             state["index_error"] = str(e)
             return state
 
+        finally:
+            # 在工作流结束时处理审核集成
+            state = self._handle_review_integration(state)
+
+    def _handle_review_integration(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        处理审核集成逻辑
+
+        Args:
+            state: 工作流状态
+
+        Returns:
+            Dict[str, Any]: 更新后的状态
+        """
+        try:
+            # 检查是否需要审核
+            classification_result = state.get("classification", {})
+            needs_review = classification_result.get("needs_review", False)
+
+            if needs_review:
+                self.logger.info("文件需要人工审核，已标记为待审核状态")
+
+                # 在状态中记录审核信息
+                state["review_required"] = True
+                state["review_reason"] = classification_result.get(
+                    "review_reason", "置信度不足"
+                )
+
+                # 记录到数据库的review状态
+                try:
+                    from ..core.database import Database
+
+                    database = Database(self.config)
+
+                    # 更新文件状态为需要审核
+                    file_path = state.get("file_path", "")
+                    if file_path:
+                        database.update_file_review_status(file_path, True)
+                        self.logger.debug(f"已标记文件为需要审核: {file_path}")
+                except Exception as db_e:
+                    self.logger.warning(f"更新审核状态失败: {db_e}")
+
+            return state
+
+        except Exception as e:
+            self.logger.error(f"处理审核集成失败: {e}")
+            return state
+
+    def get_pending_reviews_summary(self) -> Dict[str, Any]:
+        """
+        获取待审核文件摘要
+
+        Returns:
+            Dict[str, Any]: 待审核文件摘要
+        """
+        try:
+            from ..review.review_manager import ReviewManager
+
+            review_manager = ReviewManager(self.config)
+
+            stats = review_manager.get_review_statistics()
+
+            return {
+                "pending_reviews": stats.get("pending_reviews", 0),
+                "review_sessions": stats.get("total_sessions", 0),
+                "has_pending_work": stats.get("pending_reviews", 0) > 0,
+                "recommend_review": stats.get("pending_reviews", 0) > 0,
+            }
+
+        except Exception as e:
+            self.logger.error(f"获取审核摘要失败: {e}")
+            return {
+                "pending_reviews": 0,
+                "review_sessions": 0,
+                "has_pending_work": False,
+                "recommend_review": False,
+            }
+
     def get_workflow_summary(self) -> Dict[str, Any]:
         """获取工作流摘要"""
         return {

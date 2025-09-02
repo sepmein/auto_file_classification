@@ -100,6 +100,19 @@ class Config:
         self.file = FileConfig()
         self.system = SystemConfig()
 
+        # Ollama配置默认值
+        self.ollama_config = {
+            "base_url": "http://localhost:11434",
+            "model": "qwen3",
+            "reader_model": "qwen3",
+            "classifier_model": "qwen3",
+            "timeout": 300,
+            "max_retries": 3,
+            "enable_reader": True,
+            "enable_insights": True,
+            "context_window": 4096
+        }
+
         # 加载配置
         if self.config_path and os.path.exists(self.config_path):
             self.load_config()
@@ -141,6 +154,11 @@ class Config:
                 self.llm.base_url = llm_data.get("base_url", self.llm.base_url)
                 self.llm.temperature = llm_data.get("temperature", self.llm.temperature)
                 self.llm.max_tokens = llm_data.get("max_tokens", self.llm.max_tokens)
+
+            # 加载Ollama配置
+            if "ollama" in config_data:
+                # 将ollama配置存储为字典，因为Config类没有专门的OllamaConfig类
+                self.ollama_config = config_data["ollama"]
 
             # 加载嵌入模型配置
             if "embedding" in config_data:
@@ -287,6 +305,7 @@ class Config:
         """获取配置字典"""
         return {
             "llm": self.llm.__dict__,
+            "ollama": self.ollama_config,
             "embedding": self.embedding.__dict__,
             "database": self.database.__dict__,
             "classification": self.classification.__dict__,

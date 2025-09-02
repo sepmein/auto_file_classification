@@ -586,10 +586,14 @@ def watch_status(ctx, watch_pid: Optional[str]):
             click.echo(f"❌ 未找到进程 PID: {watch_pid}")
     else:
         # 显示配置文件中的监控设置
-        config = ctx.obj["config"]
+        config_obj = ctx.obj["config"]
+        config = config_obj.get_config_dict()
         watcher_config = config.get("watcher", {})
 
-        click.echo("⚙️ 监控配置状态:"        click.echo(f"   启用状态: {'是' if watcher_config.get('enabled', True) else '否'}")
+        click.echo("⚙️ 监控配置状态:")
+        click.echo(
+            f"   启用状态: {'是' if watcher_config.get('enabled', True) else '否'}"
+        )
         click.echo(f"   检测间隔: {watcher_config.get('check_interval', 5)}秒")
         click.echo(f"   递归监控: {'是' if watcher_config.get('recursive', True) else '否'}")
         click.echo(f"   队列大小: {watcher_config.get('max_queue_size', 100)}")
@@ -706,7 +710,8 @@ def check_ollama(ctx):
     """检查Ollama服务状态和可用模型"""
     import requests
 
-    config = ctx.obj["config"]
+    config_obj = ctx.obj["config"]
+    config = config_obj.get_config_dict()
     ollama_config = config.get("ollama", {})
     base_url = ollama_config.get("base_url", "http://localhost:11434")
 
@@ -755,7 +760,7 @@ def check_ollama(ctx):
     click.echo(f"   模型: {ollama_config.get('model', '未设置')}")
     click.echo(f"   阅读模型: {ollama_config.get('reader_model', '未设置')}")
     click.echo(f"   分类模型: {ollama_config.get('classifier_model', '未设置')}")
-    click.echo(f"   超时时间: {ollama_config.get('timeout', 120)} 秒")
+    click.echo(f"   超时时间: {ollama_config.get('timeout', 300)} 秒")
     click.echo(f"   最大重试: {ollama_config.get('max_retries', 3)} 次")
 
 
@@ -767,6 +772,8 @@ def check_ollama(ctx):
 @click.option("--interval", "-i", default=5, help="文件变化检测间隔（秒）")
 @click.option("--quiet", "-q", is_flag=True, help="静默模式，不显示详细信息")
 @click.option("--filter-ext", multiple=True, help="只监控指定扩展名的文件")
+@click.option("--workers", "-w", default=2, help="并发处理的工作线程数")
+@click.option("--batch-size", "-b", default=5, help="批量处理文件数量")
 @click.pass_context
 def watch(
     ctx,
@@ -789,27 +796,26 @@ def watch(
     from pathlib import Path
     from .core.watcher import DirectoryWatcher
 
-    config = ctx.obj["config"]
+    config_obj = ctx.obj["config"]
+    config_dict = config_obj.get_config_dict()
 
     # 获取监控配置
-    watcher_config = config.get("watcher", {})
+    watcher_config = config_dict.get("watcher", {})
 
-    # 使用配置中的默认值
-    if interval == 5:  # 如果用户没有指定，使用配置中的值
-        interval = watcher_config.get("check_interval", 5)
+    # 使用配置中的默认值（如果用户没有明确指定）
+    # 对于有默认值的参数，我们总是尝试从配置中获取更好的值
+    interval = watcher_config.get("check_interval", interval)
     if not recursive:
         recursive = watcher_config.get("recursive", True)
 
     # 使用配置中的并发设置
     strategy = watcher_config.get("strategy", {})
-    if workers == 2:  # 如果用户没有指定，使用配置中的值
-        workers = strategy.get("workers", 2)
-    if batch_size == 5:  # 如果用户没有指定，使用配置中的值
-        batch_size = strategy.get("batch_size", 5)
+    workers = strategy.get("workers", workers)
+    batch_size = strategy.get("batch_size", batch_size)
 
     # 确定源目录
     if not source_directory:
-        source_directory = config.file.source_directory
+        source_directory = config_obj.file.source_directory
         if not source_directory:
             click.echo("❌ 未指定源目录，请提供目录路径或在配置中设置", err=True)
             return
@@ -845,10 +851,10 @@ def watch(
     try:
         if use_enhanced or ollama_only:
             from .core.enhanced_workflow import EnhancedWorkflow
-            workflow = EnhancedWorkflow(config.get_config_dict())
+            workflow = EnhancedWorkflow(config_dict)
         else:
             from .core.workflow import DocumentClassificationWorkflow
-            workflow = DocumentClassificationWorkflow(config.get_config_dict())
+            workflow = DocumentClassificationWorkflow(config_dict)
     except Exception as e:
         click.echo(f"❌ 工作流初始化失败: {e}", err=True)
         return
@@ -976,15 +982,22 @@ def watch(
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    # 处理其他常见信号
+    # 处理其他常见信号（仅在支持的平台上）
     def handle_other_signals(signum, frame):
         nonlocal shutdown_requested, shutdown_reason
         shutdown_reason = f"系统信号 {signum}"
         click.echo(f"\n\n🛑 收到系统信号，正在安全关闭...")
         shutdown_requested = True
 
-    signal.signal(signal.SIGHUP, handle_other_signals)  # 终端关闭
-    signal.signal(signal.SIGUSR1, handle_other_signals)  # 用户信号1
+    # 仅在支持的平台上注册信号处理器
+    import platform
+
+    if platform.system() != "Windows":
+        # Unix/Linux 特有的信号
+        if hasattr(signal, "SIGHUP"):
+            signal.signal(signal.SIGHUP, handle_other_signals)  # 终端关闭
+        if hasattr(signal, "SIGUSR1"):
+            signal.signal(signal.SIGUSR1, handle_other_signals)  # 用户信号1
 
     try:
         # 启动监听器
@@ -1090,6 +1103,116 @@ def watch(
         click.echo("✅ 监控已完全停止")
         click.echo(f"💡 提示: 如需重新启动，使用以下命令:")
         click.echo(f"   python -m ods watch \"{source_path}\" {'--recursive' if recursive else ''} {'--use-enhanced' if use_enhanced or ollama_only else ''}")
+
+
+@main.command()
+@click.option("--max-files", "-n", default=10, help="最大审核文件数")
+@click.option("--user-id", "-u", help="用户ID（可选）")
+@click.option("--batch", "-b", is_flag=True, help="启用批量审核模式")
+@click.pass_context
+def review(ctx, max_files: int, user_id: str, batch: bool):
+    """启动交互式文件审核界面"""
+    config_obj = ctx.obj["config"]
+    config = config_obj.get_config_dict()
+
+    try:
+        # 导入审核模块
+        from .review.interactive_reviewer import InteractiveReviewer
+
+        # 创建审核界面
+        reviewer = InteractiveReviewer(config)
+
+        # 检查是否有待审核文件
+        pending_count = reviewer.get_pending_reviews_count()
+        if pending_count == 0:
+            click.echo("✅ 没有找到需要审核的文件！")
+            click.echo(
+                "💡 提示: 运行 'ods apply' 进行文件分类，系统会自动标记需要审核的文件"
+            )
+            return
+
+        click.echo(f"📋 发现 {pending_count} 个待审核文件")
+
+        if batch:
+            click.echo("🔄 启用批量审核模式")
+            click.echo("💡 提示: 批量模式可以对多个文件应用相同的操作，提高效率")
+
+        # 开始审核会话
+        session_id = reviewer.start_review_session(user_id)
+
+        # 运行交互式审核
+        reviewer.run_interactive_review(session_id, max_files, batch_mode=batch)
+
+    except ImportError as e:
+        click.echo(f"❌ 无法加载审核模块: {e}", err=True)
+        click.echo("💡 请确保所有依赖都已正确安装", err=True)
+    except Exception as e:
+        click.echo(f"❌ 审核过程出错: {e}", err=True)
+        click.echo("💡 请检查日志文件获取详细信息", err=True)
+
+
+@main.command()
+@click.option("--session-id", "-s", help="审核会话ID")
+@click.option("--detailed", "-d", is_flag=True, help="显示详细统计信息")
+@click.pass_context
+def review_stats(ctx, session_id: str, detailed: bool):
+    """查看审核统计信息"""
+    config_obj = ctx.obj["config"]
+    config = config_obj.get_config_dict()
+
+    try:
+        # 导入审核管理器
+        from .review.review_manager import ReviewManager
+
+        # 创建审核管理器
+        review_manager = ReviewManager(config)
+
+        # 获取统计信息
+        stats = review_manager.get_review_statistics(session_id)
+
+        if not stats:
+            click.echo("❌ 未找到审核统计信息")
+            return
+
+        click.echo("\n📊 审核统计信息")
+        click.echo("=" * 50)
+
+        if session_id:
+            # 单个会话统计
+            session_info = stats.get("session", {})
+            records_info = stats.get("records", {})
+
+            click.echo(f"🎯 会话ID: {session_id}")
+            click.echo(f"👤 用户: {session_info.get('user_id', '未指定')}")
+            click.echo(f"📅 开始时间: {session_info.get('start_time', '未知')}")
+            click.echo(f"📊 总文件数: {session_info.get('total_files', 0)}")
+            click.echo(f"✅ 已审核: {session_info.get('reviewed_files', 0)}")
+            click.echo(f"📈 完成率: {stats.get('completion_rate', 0):.1f}%")
+            click.echo(f"📋 审核记录: {records_info.get('total_reviews', 0)}")
+            click.echo(f"  ✅ 批准: {records_info.get('approved', 0)}")
+            click.echo(f"  ✏️  修改: {records_info.get('corrected', 0)}")
+            click.echo(f"  🚫 拒绝: {records_info.get('rejected', 0)}")
+
+            if detailed:
+                avg_time = records_info.get("avg_processing_time", 0)
+                if avg_time:
+                    click.echo(f"  ⏱️  平均处理时间: {avg_time:.2f} 秒")
+        else:
+            # 全局统计
+            click.echo(f"📂 待审核文件: {stats.get('pending_reviews', 0)}")
+            click.echo(f"📊 审核会话总数: {stats.get('total_sessions', 0)}")
+
+            review_actions = stats.get("review_actions", {})
+            if review_actions:
+                click.echo(f"📋 审核记录总数: {review_actions.get('total', 0)}")
+                click.echo(f"  ✅ 批准: {review_actions.get('approved', 0)}")
+                click.echo(f"  ✏️  修改: {review_actions.get('corrected', 0)}")
+                click.echo(f"  🚫 拒绝: {review_actions.get('rejected', 0)}")
+
+    except ImportError as e:
+        click.echo(f"❌ 无法加载审核模块: {e}", err=True)
+    except Exception as e:
+        click.echo(f"❌ 获取统计信息出错: {e}", err=True)
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@
 
 import sqlite3
 import logging
+import json
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -114,6 +115,46 @@ class Database:
             """
             )
 
+            # 审核会话表
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS review_sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT UNIQUE NOT NULL,
+                    user_id TEXT,
+                    start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    end_time TIMESTAMP,
+                    total_files INTEGER DEFAULT 0,
+                    reviewed_files INTEGER DEFAULT 0,
+                    status TEXT DEFAULT 'active',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """
+            )
+
+            # 审核记录表
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS review_records (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT,
+                    file_id INTEGER,
+                    original_category TEXT,
+                    original_tags TEXT,
+                    original_confidence REAL,
+                    user_category TEXT,
+                    user_tags TEXT,
+                    user_confidence REAL,
+                    review_action TEXT,
+                    review_reason TEXT,
+                    processing_time REAL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (session_id) REFERENCES review_sessions (session_id),
+                    FOREIGN KEY (file_id) REFERENCES files (id)
+                )
+            """
+            )
+
             # 创建索引
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_files_path ON files (file_path)"
@@ -129,6 +170,18 @@ class Database:
             )
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_operation_logs_type ON operation_logs (operation_type)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_review_sessions_session_id ON review_sessions (session_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_review_sessions_status ON review_sessions (status)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_review_records_session_id ON review_records (session_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_review_records_file_id ON review_records (file_id)"
             )
 
             conn.commit()
@@ -416,3 +469,209 @@ class Database:
         }
 
         return stats
+
+    # ==================== Review 相关方法 ====================
+
+    def create_review_session(self, session_id: str, user_id: str = None) -> int:
+        """
+        创建新的审核会话
+
+        Args:
+            session_id: 会话ID
+            user_id: 用户ID（可选）
+
+        Returns:
+            int: 会话ID
+        """
+        query = """
+        INSERT INTO review_sessions (session_id, user_id)
+        VALUES (?, ?)
+        """
+        params = (session_id, user_id)
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_files_needing_review(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        获取需要审核的文件列表
+
+        Args:
+            limit: 最大返回数量
+
+        Returns:
+            List[Dict[str, Any]]: 需要审核的文件列表
+        """
+        query = f"""
+        SELECT f.*, fs.category, fs.tags, fs.last_classified,
+               fs.needs_review, fs.updated_at
+        FROM files f
+        LEFT JOIN status fs ON f.file_path = fs.file_path
+        WHERE f.status = 'processed' AND fs.needs_review = TRUE
+        ORDER BY fs.last_classified DESC
+        LIMIT {limit}
+        """
+
+        result = self.execute_query(query)
+        return result
+
+    def update_file_review_status(
+        self, file_path: str, needs_review: bool = False
+    ) -> bool:
+        """
+        更新文件审核状态
+
+        Args:
+            file_path: 文件路径
+            needs_review: 是否需要审核
+
+        Returns:
+            bool: 更新是否成功
+        """
+        query = """
+        UPDATE status
+        SET needs_review = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE file_path = ?
+        """
+        params = (needs_review, file_path)
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def record_review_action(
+        self,
+        session_id: str,
+        file_id: int,
+        original_category: str,
+        original_tags: List[str],
+        user_category: str,
+        user_tags: List[str],
+        review_action: str,
+        review_reason: str = None,
+        processing_time: float = None,
+    ) -> int:
+        """
+        记录审核操作
+
+        Args:
+            session_id: 会话ID
+            file_id: 文件ID
+            original_category: 原始分类
+            original_tags: 原始标签
+            user_category: 用户选择分类
+            user_tags: 用户选择标签
+            review_action: 审核动作
+            review_reason: 审核理由
+            processing_time: 处理时间
+
+        Returns:
+            int: 记录ID
+        """
+        query = """
+        INSERT INTO review_records (
+            session_id, file_id, original_category, original_tags,
+            user_category, user_tags, review_action, review_reason, processing_time
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        params = (
+            session_id,
+            file_id,
+            original_category,
+            json.dumps(original_tags, ensure_ascii=False),
+            user_category,
+            json.dumps(user_tags, ensure_ascii=False),
+            review_action,
+            review_reason,
+            processing_time,
+        )
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_review_session_stats(self, session_id: str) -> Dict[str, Any]:
+        """
+        获取审核会话统计信息
+
+        Args:
+            session_id: 会话ID
+
+        Returns:
+            Dict[str, Any]: 会话统计
+        """
+        # 会话基本信息
+        session_query = """
+        SELECT * FROM review_sessions WHERE session_id = ?
+        """
+        session_result = self.execute_query(session_query, (session_id,))
+
+        if not session_result:
+            return {}
+
+        session = session_result[0]
+
+        # 审核记录统计
+        records_query = """
+        SELECT COUNT(*) as total_reviews,
+               SUM(CASE WHEN review_action = 'approved' THEN 1 ELSE 0 END) as approved,
+               SUM(CASE WHEN review_action = 'corrected' THEN 1 ELSE 0 END) as corrected,
+               SUM(CASE WHEN review_action = 'rejected' THEN 1 ELSE 0 END) as rejected,
+               AVG(processing_time) as avg_processing_time
+        FROM review_records WHERE session_id = ?
+        """
+        records_result = self.execute_query(records_query, (session_id,))
+        records_stats = records_result[0] if records_result else {}
+
+        return {
+            "session": session,
+            "records": records_stats,
+            "completion_rate": (
+                (records_stats.get("total_reviews", 0) / session.get("total_files", 1))
+                * 100
+                if session.get("total_files")
+                else 0
+            ),
+        }
+
+    def update_review_session(self, session_id: str, updates: Dict[str, Any]) -> bool:
+        """
+        更新审核会话信息
+
+        Args:
+            session_id: 会话ID
+            updates: 要更新的字段
+
+        Returns:
+            bool: 更新是否成功
+        """
+        if not updates:
+            return False
+
+        set_parts = []
+        params = []
+
+        for key, value in updates.items():
+            set_parts.append(f"{key} = ?")
+            params.append(value)
+
+        params.append(session_id)
+
+        query = f"""
+        UPDATE review_sessions
+        SET {', '.join(set_parts)}, updated_at = CURRENT_TIMESTAMP
+        WHERE session_id = ?
+        """
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            conn.commit()
+            return cursor.rowcount > 0
